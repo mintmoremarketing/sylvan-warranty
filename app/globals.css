@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Phones only: below this, form sections run edge to edge instead of floating as cards. */
+@theme {
+    --breakpoint-xs: 30rem;
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);
@@ -126,4 +131,78 @@
   html {
     @apply font-sans;
     }
+}
+/* How it works: steps appear one after another (circle, line, text), once on scroll and on tab switch. */
+@keyframes step-pop {
+  from { opacity: 0; transform: scale(0.85); }
+}
+@keyframes step-rise {
+  from { opacity: 0; transform: translateY(6px); }
+}
+@keyframes step-line-y {
+  from { transform: scaleY(0); }
+}
+@keyframes step-line-x {
+  from { transform: scaleX(0); }
+}
+@keyframes step-fade {
+  from { opacity: 0; }
+}
+[data-reveal="pending"] [data-step] > * {
+  opacity: 0;
+}
+[data-reveal="shown"] [data-step] {
+  --step-delay: calc(var(--i, 0) * 90ms);
+}
+[data-reveal="shown"] [data-step-circle] {
+  animation: step-pop 350ms cubic-bezier(0.23, 1, 0.32, 1) var(--step-delay) both;
+}
+[data-reveal="shown"] [data-step-text] {
+  animation: step-rise 350ms cubic-bezier(0.23, 1, 0.32, 1) calc(var(--step-delay) + 60ms) both;
+}
+[data-reveal="shown"] [data-step-line] {
+  transform-origin: top;
+  animation: step-line-y 400ms cubic-bezier(0.23, 1, 0.32, 1) calc(var(--step-delay) + 150ms) both;
+}
+@media (min-width: 64rem) {
+  [data-reveal="shown"] [data-step-line] {
+    transform-origin: left;
+    animation-name: step-line-x;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal="shown"] [data-step-circle],
+  [data-reveal="shown"] [data-step-text],
+  [data-reveal="shown"] [data-step-line] {
+    animation: step-fade 200ms ease-out both;
+  }
+}
+
+/* Text selection in Sylvan red. */
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Hero entrance: once, on load. Text parts rise in sequence; the photo settles from a slight zoom. */
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(16px); }
+}
+@keyframes hero-settle {
+  from { opacity: 0; transform: scale(1.04); }
+}
+[data-hero-item] {
+  animation: hero-rise 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+[data-hero-item]:nth-child(2) { animation-delay: 80ms; }
+[data-hero-item]:nth-child(3) { animation-delay: 160ms; }
+[data-hero-item]:nth-child(4) { animation-delay: 240ms; }
+[data-hero-media] img {
+  animation: hero-settle 1200ms cubic-bezier(0.23, 1, 0.32, 1) 100ms both;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-hero-item],
+  [data-hero-media] img {
+    animation: step-fade 300ms ease-out both;
+  }
 }

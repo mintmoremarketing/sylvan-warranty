@@ -30,6 +30,7 @@ pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -37,3 +38,16 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local design tooling and screenshots
+/.agents/
+/.taste-skill/
+/.claude/skills/
+skills-lock.json
+
+# client presentation docs (contain demo logins)
+/docs/
+
+# supabase cli
+/supabase/.temp/
+/supabase/.branches/
