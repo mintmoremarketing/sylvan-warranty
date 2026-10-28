@@ -21,7 +21,8 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  // getClaims refreshes an expired session and verifies the JWT locally, without an auth-server round trip.
+  await supabase.auth.getClaims()
   return response
 }
 

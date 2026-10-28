@@ -8,7 +8,8 @@ export async function GET(
   try {
     const info = await lookupPincode(pin)
     if (!info) return Response.json({ error: "Pincode not found" }, { status: 404 })
-    return Response.json(info)
+    // Pincodes don't change: let the CDN answer repeat lookups.
+    return Response.json(info, { headers: { "Cache-Control": "public, s-maxage=604800, stale-while-revalidate=86400" } })
   } catch (error) {
     console.error("pincode lookup", error)
     return Response.json(

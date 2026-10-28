@@ -5,7 +5,7 @@ import { Brand } from "@/components/brand"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { getAuthUser } from "@/lib/auth"
+import { PortalLabel } from "@/components/site/portal-label"
 
 const NAV = [
   { href: "/#how-it-works", label: "How it works" },
@@ -15,9 +15,7 @@ const NAV = [
   { href: "/policy", label: "Policy" },
 ]
 
-export async function SiteHeader() {
-  const user = await getAuthUser()
-  const portalLabel = user ? "My Care+" : "Login"
+export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
@@ -36,7 +34,7 @@ export async function SiteHeader() {
             Register warranty
           </Button>
           <Button render={<Link href="/my" />} nativeButton={false}>
-            {portalLabel}
+            <PortalLabel />
             <IconArrowRight data-icon="inline-end" />
           </Button>
           <Sheet>

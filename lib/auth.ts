@@ -24,11 +24,15 @@ export type Customer = {
   mobile: string | null
 }
 
-/** The signed-in Supabase user, verified with the auth server. */
-export const getAuthUser = cache(async () => {
+/**
+ * The signed-in Supabase user. The JWT is verified locally against the project's signing keys,
+ * so this costs no round trip to the auth server (it falls back to one on legacy HS256 projects).
+ */
+export const getAuthUser = cache(async (): Promise<{ id: string; email: string | undefined } | null> => {
   const supabase = await supabaseServer()
-  const { data } = await supabase.auth.getUser()
-  return data.user ?? null
+  const { data } = await supabase.auth.getClaims()
+  const claims = data?.claims
+  return claims?.sub ? { id: claims.sub, email: claims.email } : null
 })
 
 export const getStaff = cache(async (): Promise<Staff | null> => {
