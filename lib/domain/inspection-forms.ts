@@ -199,7 +199,7 @@ export function validateInspection(form: FormDef, a: InspectionAnswers, media: R
         errors[f.key] = "Enter a number"
       }
       if (f.type === "ynu" && f.adverse && v === f.adverse) {
-        if ((a.notes[f.key] ?? "").trim().length < 5) errors[`${f.key}.note`] = "Describe what you observed"
+        if (!(a.notes[f.key] ?? "").trim()) errors[`${f.key}.note`] = "Describe what you observed"
         if (!(media[`evidence:${f.key}`] ?? 0)) errors[`${f.key}.evidence`] = "Add photo evidence"
       }
     }

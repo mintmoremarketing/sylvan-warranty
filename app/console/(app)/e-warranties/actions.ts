@@ -46,7 +46,7 @@ export async function saveEWarranty(id: string, edit: EWarrantyEdit): Promise<Ac
   const mobile = edit.customer_mobile.replace(/\D/g, "").slice(0, 10)
   if (!NAME_RE.test(name)) return { ok: false, error: "Enter a valid customer name." }
   if (!MOBILE_RE.test(mobile)) return { ok: false, error: "Enter a valid 10-digit mobile number." }
-  if (edit.customer_address.trim().length < 10) return { ok: false, error: "Enter the full address." }
+  if (!edit.customer_address.trim()) return { ok: false, error: "Enter the full address." }
   if (!edit.dealer_name.trim() || !edit.invoice_number.trim()) return { ok: false, error: "Dealer and invoice number are required." }
 
   const db = supabaseAdmin()
@@ -118,7 +118,7 @@ export async function rejectEWarranty(id: string, reason: string): Promise<Actio
   const ew = await load(id, a.staff)
   if (!ew || ew.status !== "pending_review") return { ok: false, error: "Not found or already decided." }
   const note = reason.trim().slice(0, 500)
-  if (note.length < 5) return { ok: false, error: "Explain why it can't be issued." }
+  if (!note) return { ok: false, error: "Explain why it can't be issued." }
   await supabaseAdmin().from("e_warranties").update({ status: "rejected", reject_reason: note }).eq("id", id)
   await audit({ registration_id: ew.registration_id, e_warranty_id: id, entity: "e_warranty", action: "rejected", from_status: "pending_review", to_status: "rejected", actor_staff: a.staff.id, actor_label: staffLabel(a.staff), remarks: note, visible_to_customer: true, customer_message: "Standard e-warranty could not be issued" })
   revalidatePath("/console", "layout")

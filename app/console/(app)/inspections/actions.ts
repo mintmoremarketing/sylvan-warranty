@@ -93,7 +93,7 @@ export async function submitInspection(id: string, raw: InspectionSubmission): P
   const errors: Record<string, string> = {}
   if (raw.outcome === "completed") Object.assign(errors, validateInspection(form, { values, notes }, counts))
   else if (!(values.remarks ?? "").trim()) errors.remarks = "Explain why a revisit is needed"
-  if (!raw.geo && (raw.geoNote ?? "").trim().length < 5) errors.geo = "Capture the location, or explain why it isn't available"
+  if (!raw.geo && !(raw.geoNote ?? "").trim()) errors.geo = "Capture the location, or explain why it isn't available"
   if (!raw.declared) errors.declared = "Confirm the inspector declaration"
   if (raw.outcome === "completed" && (!raw.ackConfirmed || !(raw.ackName ?? "").trim())) errors.ack = "Record the customer / site owner acknowledgement"
   if (!(await verifyUploads(user!.id, allFiles))) errors.form = "Some photos didn't upload. Please re-add them."

@@ -132,7 +132,7 @@ export async function requestInfo(id: string, items: string[], remarks: string):
   const picked = items.filter((i) => (INFO_REQUEST_ITEMS as readonly string[]).includes(i))
   const note = remarks.trim().slice(0, 1000)
   if (!picked.length) return { ok: false, error: "Select what the customer needs to provide." }
-  if (note.length < 5) return { ok: false, error: "Add remarks explaining what's needed." }
+  if (!note) return { ok: false, error: "Add remarks explaining what's needed." }
   const r = await reg(id)
   if (!r) return { ok: false, error: "Not found." }
   const from = [...(hasRole(a.staff, ["verifier"]) ? ["under_verification"] : []), ...(hasRole(a.staff, ["approver"]) ? APPROVAL_STAGE : [])]
@@ -180,7 +180,7 @@ export async function decideInspection(id: string, needed: boolean, reasonCode: 
 
   const { data: reason } = await supabaseAdmin().from("reason_codes").select("label, requires_remarks").eq("code", reasonCode).eq("context", "no_inspection").maybeSingle()
   if (!reason) return { ok: false, error: "Choose why an inspection isn't needed." }
-  if (reason.requires_remarks && note.length < 5) return { ok: false, error: "Add remarks for “Other”." }
+  if (reason.requires_remarks && !note) return { ok: false, error: "Add remarks for “Other”." }
   // §8: without an inspection the 48 working hours run from submission to certificate, so the
   // registration keeps its existing due time.
   return moveRegistration(
@@ -284,7 +284,7 @@ export async function approveRegistration(id: string, remarks: string, rawFiles:
   const a = await staffForAction(["approver"])
   if (!a.ok) return a
   const note = remarks.trim().slice(0, 1000)
-  if (note.length < 5) return { ok: false, error: "Remarks are mandatory for every decision." }
+  if (!note) return { ok: false, error: "Remarks are mandatory for every decision." }
   const r = await reg(id)
   if (!r) return { ok: false, error: "Not found." }
   if (!APPROVAL_STAGE.includes(r.status)) return { ok: false, error: "This registration isn't ready for approval." }
@@ -323,7 +323,7 @@ export async function rejectRegistration(id: string, reasonCode: string, remarks
   const note = remarks.trim().slice(0, 1000)
   const { data: reason } = await supabaseAdmin().from("reason_codes").select("label").eq("code", reasonCode).eq("context", "registration_reject").maybeSingle()
   if (!reason) return { ok: false, error: "Choose a rejection reason." }
-  if (note.length < 5) return { ok: false, error: "Detailed remarks are mandatory for a rejection." }
+  if (!note) return { ok: false, error: "Detailed remarks are mandatory for a rejection." }
   const r = await reg(id)
   if (!r) return { ok: false, error: "Not found." }
   if (!APPROVAL_STAGE.includes(r.status)) return { ok: false, error: "This registration isn't ready for a decision." }
@@ -353,7 +353,7 @@ export async function clearFlag(flagId: string, reason: string): Promise<ActionR
   const a = await staffForAction(["verifier", "approver"])
   if (!a.ok) return a
   const note = reason.trim().slice(0, 500)
-  if (note.length < 5) return { ok: false, error: "Explain why this flag is cleared — it's logged as an override." }
+  if (!note) return { ok: false, error: "Explain why this flag is cleared — it's logged as an override." }
   const db = supabaseAdmin()
   const { data: flag } = await db.from("fraud_flags").select("id, registration_id, claim_id, code, detail, status").eq("id", flagId).maybeSingle()
   if (!flag || flag.status !== "open") return { ok: false, error: "Flag not found." }

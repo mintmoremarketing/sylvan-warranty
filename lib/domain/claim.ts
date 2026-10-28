@@ -32,7 +32,7 @@ export function validateClaim(p: ClaimInput, items: ClaimItemRef[], today: strin
   if (!p.noticed_on) e.noticed_on = "When did you notice the problem?"
   else if (p.noticed_on > today) e.noticed_on = "Can't be in the future"
   else if (item?.care_start && p.noticed_on < item.care_start) e.noticed_on = "Can't be before your warranty started"
-  if (p.description.trim().length < 20) e.description = "Describe the problem in a few sentences (at least 20 characters)"
+  if (!p.description.trim()) e.description = "Describe the problem"
   if (p.photos.length < MIN_CLAIM_PHOTOS) e.photos = `Add at least ${MIN_CLAIM_PHOTOS} photos of the affected area`
   if (p.photos.length > MAX_CLAIM_PHOTOS) e.photos = `Up to ${MAX_CLAIM_PHOTOS} photos`
   if (p.videos.length > 1) e.videos = "Add one video at most"

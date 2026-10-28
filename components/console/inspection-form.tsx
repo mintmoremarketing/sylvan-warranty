@@ -87,7 +87,7 @@ export function InspectionForm({ id, form }: { id: string; form: FormDef }) {
     if (!showErrors) return {}
     const e: Record<string, string> = outcome === "completed" ? validateInspection(form, { values, notes }, counts) : {}
     if (outcome === "revisit_required" && !(values.remarks ?? "").trim()) e.remarks = "Explain why a revisit is needed"
-    if (!geo && geoNote.trim().length < 5) e.geo = "Capture the location, or explain why it isn't available"
+    if (!geo && !geoNote.trim()) e.geo = "Capture the location, or explain why it isn't available"
     if (!declared) e.declared = "Confirm the inspector declaration"
     if (outcome === "completed" && (!ackConfirmed || !ackName.trim())) e.ack = "Record the customer / site owner acknowledgement"
     return e

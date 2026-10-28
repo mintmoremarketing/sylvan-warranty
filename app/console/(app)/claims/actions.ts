@@ -71,7 +71,7 @@ export async function saveScreening(
 
   const { data: reason } = await supabaseAdmin().from("reason_codes").select("label").eq("code", findingCode).eq("context", "claim_finding").maybeSingle()
   if (!reason) return { ok: false, error: "Choose the reason for rejection." }
-  if (note.length < 5) return { ok: false, error: "Remarks are mandatory for a rejection." }
+  if (!note) return { ok: false, error: "Remarks are mandatory for a rejection." }
   const res = await moveClaim(
     a.staff,
     id,
@@ -89,7 +89,7 @@ export async function requestClaimInfo(id: string, items: string[], remarks: str
   if (!a.ok) return a
   const picked = items.filter((i) => (INFO_REQUEST_ITEMS as readonly string[]).includes(i))
   const note = remarks.trim().slice(0, 1000)
-  if (!picked.length || note.length < 5) return { ok: false, error: "Select what's needed and add remarks." }
+  if (!picked.length || !note) return { ok: false, error: "Select what's needed and add remarks." }
   const c = await claim(id)
   if (!c) return { ok: false, error: "Not found." }
   const db = supabaseAdmin()
@@ -155,7 +155,7 @@ export async function recordSample(id: string, input: { seal_no: string; descrip
   const seal = input.seal_no.trim().slice(0, 40)
   const desc = input.description.trim().slice(0, 500)
   const at = new Date(input.collected_at)
-  if (!seal || desc.length < 3 || isNaN(at.getTime())) return { ok: false, error: "Enter the seal number, description and collection time." }
+  if (!seal || !desc || isNaN(at.getTime())) return { ok: false, error: "Enter the seal number, description and collection time." }
   const db = supabaseAdmin()
   const { data: sample, error } = await db.from("samples").insert({ claim_id: id, seal_no: seal, description: desc, collected_by: a.staff.id, collected_at: at.toISOString(), customer_ack: !!input.customer_ack }).select("id").single()
   if (error) return { ok: false, error: error.code === "23505" ? "That seal number is already used." : "Couldn't save the sample." }
@@ -195,7 +195,7 @@ export async function addLabReport(
   if (!c) return { ok: false, error: "Not found." }
   if (!(LABS as readonly string[]).includes(input.lab_name)) return { ok: false, error: "Choose the laboratory." }
   if (!["defect_confirmed", "no_defect", "inconclusive"].includes(input.result)) return { ok: false, error: "Choose the result." }
-  if (!input.report_date || input.summary.trim().length < 5) return { ok: false, error: "Add the report date and a summary." }
+  if (!input.report_date || !input.summary.trim()) return { ok: false, error: "Add the report date and a summary." }
   const files = cleanFiles(input.files, 3)
   if (!(await verifyUploads(user!.id, files))) return { ok: false, error: "Please re-upload the report." }
 
@@ -229,7 +229,7 @@ export async function decideClaim(id: string, decision: "approved" | "partially_
   const c = await claim(id)
   if (!c) return { ok: false, error: "Not found." }
   const note = remarks.trim().slice(0, 2000)
-  if (note.length < 10) return { ok: false, error: "HO technical remarks are mandatory." }
+  if (!note) return { ok: false, error: "HO technical remarks are mandatory." }
   const { data: reason } = await supabaseAdmin().from("reason_codes").select("label").eq("code", findingCode).eq("context", "claim_finding").maybeSingle()
   if (!reason) return { ok: false, error: "Choose the technical finding." }
   let qty: number | null = null

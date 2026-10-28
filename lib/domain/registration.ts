@@ -191,8 +191,7 @@ export function validateRegistration(p: RegistrationInput, ctx: ValidationContex
     e.owner_email = "Enter a valid email address"
   if (req("owner_mobile", p.owner_mobile, "Mobile number") && !MOBILE_RE.test(p.owner_mobile))
     e.owner_mobile = "Enter a valid 10-digit mobile number"
-  if (req("site_address", p.site_address, "Site address") && p.site_address.trim().length < 10)
-    e.site_address = "Enter the full site address"
+  req("site_address", p.site_address, "Site address")
   req("city", p.city, "City / town")
   if (req("pincode", p.pincode, "Pincode") && !PINCODE_RE.test(p.pincode))
     e.pincode = "Enter a valid 6-digit pincode"
