@@ -89,7 +89,7 @@ export default async function RegistrationReview({ params }: { params: Promise<{
   }
   const saved = reg.verification?.checks as Record<VerificationKey, VerificationResult> | undefined
   const decisionDocs = reg.documents.filter((d) => d.kind === "decision_evidence")
-  const groups = reviewGroups(reg, staff, nameOf)
+  const groups = reviewGroups(reg, staff, nameOf, undefined, suggested)
 
   return (
     <>
@@ -122,7 +122,7 @@ export default async function RegistrationReview({ params }: { params: Promise<{
           <Card className={CONSOLE_CARD}>
             <CardHeader>
               <CardTitle>Product checks</CardTitle>
-              <CardDescription>Check each product against the invoice and photos. Each certificate lists only its approved products.</CardDescription>
+              <CardDescription>Open each product to answer the verification checklist, then approve or reject it. Each certificate lists only its approved products.</CardDescription>
             </CardHeader>
             <CardContent>
               <ProductReview groups={groups} />
@@ -280,7 +280,7 @@ export default async function RegistrationReview({ params }: { params: Promise<{
                   <CardDescription>
                     {saved && reg.verified_at
                       ? `Verified by ${nameOf.get(reg.verified_by ?? "") ?? "—"} on ${formatDateTime(reg.verified_at)}`
-                      : "Not verified yet. Suggestions from the system are shown in grey; the backend executive confirms each check."}
+                      : "Not verified yet. Open each product under Product checks and answer its checklist; the combined result shows here."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -401,7 +401,6 @@ export default async function RegistrationReview({ params }: { params: Promise<{
           inspectors={inspectorOptions}
           rejectReasons={(reasons ?? []).filter((r) => r.context === "registration_reject").map((r) => ({ value: r.code, label: r.label }))}
           noInspectionReasons={(reasons ?? []).filter((r) => r.context === "no_inspection").map((r) => ({ value: r.code, label: r.label }))}
-          checks={saved ?? suggested}
           verified={!!reg.verified_at}
           previewUrl={`/api/certificates/care-plus/${ref}?preview=1`}
         />

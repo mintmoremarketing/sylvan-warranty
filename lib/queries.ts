@@ -30,6 +30,7 @@ export type RegistrationItem = {
   care_expiry: string | null
   utilised_qty: number
   review_status: "pending" | "approved" | "rejected"
+  review_checks: Record<string, "ok" | "issue"> | null
   review_note: string | null
   reviewed_by: string | null
   reviewed_at: string | null

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { IconCheck, IconClipboardCheck, IconListCheck, IconMessageQuestion, IconUserPlus, IconX } from "@tabler/icons-react"
+import { IconCheck, IconClipboardCheck, IconMessageQuestion, IconUserPlus, IconX } from "@tabler/icons-react"
 
 import {
   approveRegistration,
@@ -11,7 +11,6 @@ import {
   decideInspection,
   rejectRegistration,
   requestInfo,
-  saveVerification,
   startVerification,
 } from "@/app/console/(app)/registrations/actions"
 import { ActionBar, ActionDrawer } from "@/components/console/action-drawer"
@@ -25,11 +24,9 @@ import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { INFO_REQUEST_ITEMS, VERIFICATION_CHECKS, type Role, type VerificationResult } from "@/lib/domain/constants"
+import { INFO_REQUEST_ITEMS, type Role } from "@/lib/domain/constants"
 
 type Option = { value: string; label: string }
-type Checks = Partial<Record<string, VerificationResult>>
 
 type Props = {
   id: string
@@ -39,7 +36,6 @@ type Props = {
   rejectReasons: Option[]
   noInspectionReasons: Option[]
   /** Saved verification, or the system's suggestions when none is saved yet. */
-  checks: Checks
   verified: boolean
   /** The SylvanCare+ certificate as it will be issued, shown before approving. */
   previewUrl: string
@@ -53,7 +49,7 @@ const can = (roles: Role[], allowed: Role[]) => roles.includes("admin") || allow
  * executive verifies, asks for information, decides on inspection and assigns the inspector; the authorised
  * approver approves or rejects.
  */
-export function RegistrationActions({ id, status, roles, inspectors, rejectReasons, noInspectionReasons, checks, verified, previewUrl }: Props) {
+export function RegistrationActions({ id, status, roles, inspectors, rejectReasons, noInspectionReasons, verified, previewUrl }: Props) {
   const router = useRouter()
   const started = useRef(false)
   const backend = can(roles, ["verifier"])
@@ -76,7 +72,9 @@ export function RegistrationActions({ id, status, roles, inspectors, rejectReaso
 
   return (
     <ActionBar>
-      {backend && status === "under_verification" && <Verify id={id} initial={checks} saved={verified} />}
+      {backend && status === "under_verification" && !verified && (
+        <p className="self-center text-sm text-muted-foreground">Check every SylvanCare+ product above to complete verification.</p>
+      )}
       {backend && status === "under_verification" && verified && <InspectionDecision id={id} reasons={noInspectionReasons} />}
       {backend && ["inspection_required", "inspector_assigned"].includes(status) && (
         <AssignInspector id={id} inspectors={inspectors} reassign={status === "inspector_assigned"} />
@@ -86,52 +84,6 @@ export function RegistrationActions({ id, status, roles, inspectors, rejectReaso
       {approver && atApproval && <Reject id={id} reasons={rejectReasons} />}
       {status === "info_required" && <p className="self-center text-sm text-muted-foreground">Waiting for the customer to upload the requested information.</p>}
     </ActionBar>
-  )
-}
-
-function Verify({ id, initial, saved }: { id: string; initial: Checks; saved: boolean }) {
-  const [checks, setChecks] = useState<Checks>(initial)
-  const [remarks, setRemarks] = useState("")
-  const issues = VERIFICATION_CHECKS.filter((c) => checks[c.key] === "issue").length
-  return (
-    <ActionDrawer
-      trigger={<Button variant={saved ? "outline" : "default"} className="flex-1 sm:flex-none" />}
-      title="Backend verification"
-      description="Check each item against the invoice, documents and photos. Your name is recorded with the verification."
-      submitLabel="Save verification"
-      success="Verification recorded"
-      run={() => saveVerification(id, checks as Record<string, VerificationResult>, remarks)}
-      label={<><IconListCheck data-icon="inline-start" />{saved ? "Update verification" : "Verify"}</>}
-    >
-      <div className="flex flex-col gap-4">
-        {VERIFICATION_CHECKS.map((c) => (
-          <Field key={c.key}>
-            <FieldLabel>{c.label}</FieldLabel>
-            <ToggleGroup
-              variant="outline"
-              spacing={2}
-              value={checks[c.key] ? [checks[c.key]!] : []}
-              onValueChange={(v) => setChecks((prev) => ({ ...prev, [c.key]: (v as VerificationResult[])[0] }))}
-              className="w-full"
-            >
-              <ToggleGroupItem value="ok" className="h-10 flex-1">
-                OK
-              </ToggleGroupItem>
-              <ToggleGroupItem value="issue" className="h-10 flex-1">
-                Issue
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </Field>
-        ))}
-      </div>
-      <FormField
-        label="Remarks"
-        htmlFor="verify-remarks"
-        description={issues > 0 ? "Optional. Describe the issues; if they can be corrected, request additional information next." : "Optional."}
-      >
-        <Textarea id="verify-remarks" rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
-      </FormField>
-    </ActionDrawer>
   )
 }
 

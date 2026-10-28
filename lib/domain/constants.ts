@@ -124,6 +124,9 @@ export const VERIFICATION_CHECKS = [
 ] as const
 export type VerificationKey = (typeof VERIFICATION_CHECKS)[number]["key"]
 export type VerificationResult = "ok" | "issue"
+/** The checks answered for one product; the SylvanCare+-only ones are left out for a standard product. */
+export const checksFor = (carePlus: boolean) =>
+  VERIFICATION_CHECKS.filter((c) => carePlus || (c.key !== "product_eligible" && c.key !== "manufacture_date"))
 
 export const LABS = [
   "Sylvan in-house laboratory",

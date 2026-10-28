@@ -3,17 +3,19 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { IconArrowBackUp, IconCertificate, IconCheck, IconShieldCheck, IconX } from "@tabler/icons-react"
+import { IconArrowBackUp, IconCertificate, IconChevronRight, IconListCheck, IconShieldCheck } from "@tabler/icons-react"
 
 import { reviewItem } from "@/app/console/(app)/registrations/actions"
 import { ActionDrawer } from "@/components/console/action-drawer"
 import { FormField } from "@/components/form-field"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import { categoryLabel, ITEM_REVIEW, type ItemReview } from "@/lib/domain/constants"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { categoryLabel, checksFor, ITEM_REVIEW, type ItemReview, type VerificationKey, type VerificationResult } from "@/lib/domain/constants"
 
 export type ReviewLine = {
   id: string
@@ -24,6 +26,11 @@ export type ReviewLine = {
   invoice_number: string
   review_status: ItemReview
   review_note: string | null
+  /** The saved checklist answers for this product. */
+  checks: Record<string, VerificationResult> | null
+  /** What the system can already tell, used to pre-fill a new checklist. */
+  suggested: Partial<Record<VerificationKey, VerificationResult>>
+  care_plus: boolean
   reviewed: string | null
   /** Whether the current staff member can approve / reject this line now. */
   editable: boolean
@@ -66,18 +73,28 @@ export function ProductReview({ groups }: { groups: ReviewGroup[] }) {
 
 function Line({ line }: { line: ReviewLine }) {
   const router = useRouter()
-  const [note, setNote] = useState("")
+  const [open, setOpen] = useState(false)
   const [pending, start] = useTransition()
-  const decide = (decision: "approved" | "pending") =>
+  const keys = checksFor(line.care_plus)
+  const issues = line.checks ? keys.filter((c) => line.checks![c.key] === "issue").length : 0
+  const undo = () =>
     start(async () => {
-      const res = await reviewItem(line.id, decision, "")
+      const res = await reviewItem(line.id, "pending", "")
       if (!res.ok) return void toast.error(res.error)
-      toast.success(decision === "approved" ? `${line.product_name} approved` : "Check undone")
+      toast.success("Check undone")
       router.refresh()
     })
 
   return (
-    <Item variant="outline" size="sm" className="items-start">
+    <Item
+      variant="outline"
+      size="sm"
+      className={line.editable ? "cursor-pointer items-start hover:bg-muted/50" : "items-start"}
+      onClick={(e) => {
+        // Clicking anywhere on the product opens its checklist; the Undo button keeps its own click.
+        if (line.editable && !(e.target as HTMLElement).closest("button")) setOpen(true)
+      }}
+    >
       <ItemContent>
         <ItemTitle className="flex-wrap">
           {line.product_name}
@@ -86,6 +103,7 @@ function Line({ line }: { line: ReviewLine }) {
         </ItemTitle>
         <ItemDescription className="line-clamp-none">
           {line.qty_used} used at site of {line.qty_purchased} bought · invoice {line.invoice_number}
+          {line.checks && ` · ${issues ? `${issues} issue${issues === 1 ? "" : "s"}` : "all checks OK"}`}
           {line.reviewed && (
             <>
               <br />
@@ -101,36 +119,86 @@ function Line({ line }: { line: ReviewLine }) {
       </ItemContent>
       {line.editable && (
         <ItemActions className="flex-wrap justify-end">
-          {line.review_status === "pending" ? (
-            <>
-              <Button size="sm" variant="outline" disabled={pending} onClick={() => decide("approved")}>
-                {pending ? <Spinner data-icon="inline-start" /> : <IconCheck data-icon="inline-start" />}
-                Approve
-              </Button>
-              <ActionDrawer
-                trigger={<Button size="sm" variant="ghost" className="text-destructive" />}
-                label={<><IconX data-icon="inline-start" />Reject</>}
-                title={`Reject ${line.product_name}`}
-                description="This product is left off the certificate. The other products are not affected."
-                submitLabel="Reject product"
-                destructive
-                success={`${line.product_name} rejected`}
-                run={() => reviewItem(line.id, "rejected", note)}
-              >
-                <FormField label="Reason" htmlFor={`reject-${line.id}`} description="Optional.">
-                  <Textarea id={`reject-${line.id}`} rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-                </FormField>
-              </ActionDrawer>
-            </>
-          ) : (
-            <Button size="sm" variant="ghost" disabled={pending} onClick={() => decide("pending")}>
+          {line.review_status !== "pending" && (
+            <Button size="sm" variant="ghost" disabled={pending} onClick={undo}>
               {pending ? <Spinner data-icon="inline-start" /> : <IconArrowBackUp data-icon="inline-start" />}
               Undo
             </Button>
           )}
+          <Button size="sm" variant={line.review_status === "pending" ? "outline" : "ghost"} onClick={() => setOpen(true)}>
+            <IconListCheck data-icon="inline-start" />
+            {line.review_status === "pending" ? "Check" : "Review"}
+            <IconChevronRight data-icon="inline-end" />
+          </Button>
+          {open && <CheckDrawer line={line} open={open} onOpenChange={setOpen} />}
         </ItemActions>
       )}
     </Item>
+  )
+}
+
+/** The backend verification checklist for one product, then its decision. */
+function CheckDrawer({ line, open, onOpenChange }: { line: ReviewLine; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const keys = checksFor(line.care_plus)
+  const [checks, setChecks] = useState<Partial<Record<string, VerificationResult>>>(line.checks ?? line.suggested)
+  const [decision, setDecision] = useState<"approved" | "rejected" | "">(line.review_status === "pending" ? "" : line.review_status)
+  const [note, setNote] = useState(line.review_note ?? "")
+  return (
+    <ActionDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Check ${line.product_name}`}
+      description="Check each item against the invoice, documents and photos. Your name is recorded with the check."
+      submitLabel="Save check"
+      destructive={decision === "rejected"}
+      success={decision === "rejected" ? `${line.product_name} rejected` : `${line.product_name} approved`}
+      run={async () => {
+        if (!decision) return { ok: false, error: "Choose approve or reject for this product." }
+        return reviewItem(line.id, decision, note, checks as Record<string, VerificationResult>)
+      }}
+    >
+      <div className="flex flex-col gap-4">
+        {keys.map((c) => (
+          <Field key={c.key}>
+            <FieldLabel>{c.label}</FieldLabel>
+            <ToggleGroup
+              variant="outline"
+              spacing={2}
+              value={checks[c.key] ? [checks[c.key]!] : []}
+              onValueChange={(v) => setChecks((prev) => ({ ...prev, [c.key]: (v as VerificationResult[])[0] }))}
+              className="w-full"
+            >
+              <ToggleGroupItem value="ok" className="h-10 flex-1">
+                OK
+              </ToggleGroupItem>
+              <ToggleGroupItem value="issue" className="h-10 flex-1">
+                Issue
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </Field>
+        ))}
+        <Field>
+          <FieldLabel>Decision for this product</FieldLabel>
+          <ToggleGroup
+            variant="outline"
+            spacing={2}
+            value={decision ? [decision] : []}
+            onValueChange={(v) => setDecision(((v as string[])[0] as "approved" | "rejected") ?? "")}
+            className="w-full"
+          >
+            <ToggleGroupItem value="approved" className="h-10 flex-1">
+              Approve
+            </ToggleGroupItem>
+            <ToggleGroupItem value="rejected" className="h-10 flex-1">
+              Reject
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </Field>
+      </div>
+      <FormField label="Remarks" htmlFor={`check-${line.id}`} description="Optional.">
+        <Textarea id={`check-${line.id}`} rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+      </FormField>
+    </ActionDrawer>
   )
 }
 

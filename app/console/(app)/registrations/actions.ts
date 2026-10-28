@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { audit } from "@/lib/audit"
 import { hasRole, staffForAction, staffLabel, type Staff } from "@/lib/auth"
-import { INFO_REQUEST_ITEMS, VERIFICATION_CHECKS, type VerificationResult } from "@/lib/domain/constants"
+import { checksFor, INFO_REQUEST_ITEMS, VERIFICATION_CHECKS, type VerificationResult } from "@/lib/domain/constants"
 import { formatDate, formatDateTime } from "@/lib/domain/dates"
 import { formatMobile } from "@/lib/domain/format"
 import { toSlug } from "@/lib/domain/numbers"
@@ -81,7 +81,12 @@ export async function saveVerification(id: string, results: Record<string, Verif
  * (or the approver) until the SylvanCare+ decision; standard products also by the sales coordinator, until the
  * e-warranty is issued. Only approved products go on the certificates.
  */
-export async function reviewItem(itemId: string, decision: "approved" | "rejected" | "pending", remarks: string): Promise<ActionResult> {
+export async function reviewItem(
+  itemId: string,
+  decision: "approved" | "rejected" | "pending",
+  remarks: string,
+  results: Record<string, VerificationResult> = {}
+): Promise<ActionResult> {
   const a = await staffForAction(["verifier", "approver", "sales_coordinator"])
   if (!a.ok) return a
   if (!["approved", "rejected", "pending"].includes(decision)) return { ok: false, error: "Choose approve or reject." }
@@ -103,10 +108,21 @@ export async function reviewItem(itemId: string, decision: "approved" | "rejecte
     if (ewStatus !== "pending_review") return { ok: false, error: "The e-warranty has already been decided." }
   }
 
+  // The verification checklist is answered for the product before it is approved or rejected.
+  const keys = checksFor(item.care_plus).map((c) => c.key)
+  const checks = decision === "pending" ? null : Object.fromEntries(keys.map((k) => [k, results[k]]))
+  if (checks && Object.values(checks).some((v) => v !== "ok" && v !== "issue")) return { ok: false, error: "Mark every check as OK or Issue." }
+
   const note = remarks.trim().slice(0, 500)
   const { error } = await db
     .from("registration_items")
-    .update({ review_status: decision, review_note: note || null, reviewed_by: decision === "pending" ? null : a.staff.id, reviewed_at: decision === "pending" ? null : new Date().toISOString() })
+    .update({
+      review_status: decision,
+      review_checks: checks,
+      review_note: note || null,
+      reviewed_by: decision === "pending" ? null : a.staff.id,
+      reviewed_at: decision === "pending" ? null : new Date().toISOString(),
+    })
     .eq("id", itemId)
   if (error) return { ok: false, error: "Couldn't save the check." }
   await audit({
@@ -116,10 +132,41 @@ export async function reviewItem(itemId: string, decision: "approved" | "rejecte
     actor_staff: a.staff.id,
     actor_label: staffLabel(a.staff),
     remarks: note || null,
-    data: { product: item.product_name, programme: item.care_plus ? "SylvanCare+" : "Standard" },
+    data: {
+      product: item.product_name,
+      programme: item.care_plus ? "SylvanCare+" : "Standard",
+      issues: checks ? checksFor(item.care_plus).filter((c) => checks[c.key] === "issue").map((c) => c.label) : [],
+    },
   })
+  if (item.care_plus && regStatus === "under_verification") await syncVerification(item.registration_id, a.staff)
   revalidatePath("/console", "layout")
   return { ok: true }
+}
+
+/**
+ * Once every SylvanCare+ product has been checked, the registration is verified: each check is OK only if it
+ * was OK for every product. Undoing a product's check makes the registration unverified again.
+ */
+async function syncVerification(registrationId: string, staff: Staff) {
+  const db = supabaseAdmin()
+  const { data: items } = await db.from("registration_items").select("review_status, review_checks").eq("registration_id", registrationId).eq("care_plus", true)
+  const all = items ?? []
+  if (all.some((i) => i.review_status === "pending")) {
+    await db.from("registrations").update({ verification: null, verified_by: null, verified_at: null }).eq("id", registrationId)
+    return
+  }
+  const checks = Object.fromEntries(
+    VERIFICATION_CHECKS.map((c) => [c.key, all.some((i) => (i.review_checks as Record<string, string> | null)?.[c.key] === "issue") ? "issue" : "ok"])
+  )
+  await db.from("registrations").update({ verification: { checks, remarks: null }, verified_by: staff.id, verified_at: new Date().toISOString() }).eq("id", registrationId)
+  await audit({
+    registration_id: registrationId,
+    entity: "registration",
+    action: "verification_recorded",
+    actor_staff: staff.id,
+    actor_label: staffLabel(staff),
+    data: { issues: VERIFICATION_CHECKS.filter((c) => checks[c.key] === "issue").map((c) => c.label) },
+  })
 }
 
 /**
