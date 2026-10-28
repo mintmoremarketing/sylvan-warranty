@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { IconCertificate, IconDeviceFloppy, IconX } from "@tabler/icons-react"
+import { IconCertificate, IconDeviceFloppy, IconUserPlus, IconX } from "@tabler/icons-react"
 
-import { issueEWarranty, rejectEWarranty, saveEWarranty, type EWarrantyEdit } from "@/app/console/(app)/e-warranties/actions"
+import { assignEWarrantyInspector, issueEWarranty, rejectEWarranty, saveEWarranty, type EWarrantyEdit } from "@/app/console/(app)/e-warranties/actions"
 import { ActionBar, ActionDrawer } from "@/components/console/action-drawer"
+import { CertificatePreview } from "@/components/console/certificate-preview"
 import { CONSOLE_CARD } from "@/components/console/page-header"
 import { FormField } from "@/components/form-field"
 import { PhoneInput } from "@/components/phone-input"
@@ -29,6 +30,8 @@ export function EWarrantyEditor({
   coordinators,
   isWpc,
   canAssign,
+  inspectors,
+  previewUrl,
 }: {
   id: string
   initial: Omit<EWarrantyEdit, "items">
@@ -37,6 +40,9 @@ export function EWarrantyEditor({
   coordinators: Option[]
   isWpc: boolean
   canAssign: boolean
+  inspectors: Option[]
+  /** The certificate as it will be issued, shown before issuing. */
+  previewUrl: string
 }) {
   const router = useRouter()
   const [form, setForm] = useState(initial)
@@ -44,6 +50,9 @@ export function EWarrantyEditor({
   const [error, setError] = useState("")
   const [saving, start] = useTransition()
   const [rejectReason, setRejectReason] = useState("")
+  const [issueOpen, setIssueOpen] = useState(false)
+  // Each opening reloads the preview, so it shows the details just saved.
+  const [previewKey, setPreviewKey] = useState(0)
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }))
   const payload = (): EWarrantyEdit => ({ ...form, items: rows.map(({ id, product_id, qty }) => ({ id, product_id, qty })) })
 
@@ -111,12 +120,13 @@ export function EWarrantyEditor({
               <p className="text-sm font-medium">Products</p>
               {rows.map((r) => {
                 // Brief: category and quantity are editable for PLY / BB / FD; product name for all.
+                const wpc = r.category === "wpc"
                 const options = products
-                  .filter((p) => !isWpc || p.category === r.category)
-                  .map((p) => ({ value: p.id, label: isWpc ? p.name : `${p.name} · ${categoryLabel(p.category)}` }))
+                  .filter((p) => (wpc ? p.category === "wpc" : p.category !== "wpc"))
+                  .map((p) => ({ value: p.id, label: wpc ? p.name : `${p.name} · ${categoryLabel(p.category)}` }))
                 return (
                   <div key={r.id} className="grid gap-3 rounded-lg bg-muted/60 p-3 sm:grid-cols-[1fr_7rem]">
-                    <FormField label={isWpc ? `${categoryLabel(r.category)} · invoice ${r.invoice_number}` : `Category and product · invoice ${r.invoice_number}`} htmlFor={`ew-p-${r.id}`}>
+                    <FormField label={wpc ? `${categoryLabel(r.category)} · invoice ${r.invoice_number}` : `Category and product · invoice ${r.invoice_number}`} htmlFor={`ew-p-${r.id}`}>
                       <Select
                         value={r.product_id}
                         onValueChange={(v) =>
@@ -139,7 +149,7 @@ export function EWarrantyEditor({
                       </Select>
                     </FormField>
                     <FormField label="Quantity" htmlFor={`ew-q-${r.id}`}>
-                      <Input id={`ew-q-${r.id}`} inputMode="numeric" className="bg-background" value={r.qty} readOnly={isWpc} onChange={(e) => setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, qty: e.target.value.replace(/\D/g, "") } : x)))} />
+                      <Input id={`ew-q-${r.id}`} inputMode="numeric" className="bg-background" value={r.qty} readOnly={wpc} onChange={(e) => setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, qty: e.target.value.replace(/\D/g, "") } : x)))} />
                     </FormField>
                   </div>
                 )
@@ -164,19 +174,33 @@ export function EWarrantyEditor({
           {saving ? <Spinner data-icon="inline-start" /> : <IconDeviceFloppy data-icon="inline-start" />}
           Save changes
         </Button>
+        <Button
+          className="h-10 flex-1 sm:flex-none"
+          disabled={saving}
+          onClick={async () => {
+            // Save first, so the preview shows exactly what will be issued.
+            if (await save()) {
+              setPreviewKey((k) => k + 1)
+              setIssueOpen(true)
+            }
+          }}
+        >
+          <IconCertificate data-icon="inline-start" />
+          Issue e-warranty
+        </Button>
         <ActionDrawer
-          trigger={<Button className="h-10 flex-1 sm:flex-none" />}
-          label={<><IconCertificate data-icon="inline-start" />Issue e-warranty</>}
+          open={issueOpen}
+          onOpenChange={setIssueOpen}
+          wide
           title="Issue the e-warranty certificate"
-          description="Saves your changes, assigns the next warranty number and emails the certificate to the customer."
+          description="Check the certificate below. Issuing assigns the warranty number and emails it to the customer."
           submitLabel="Issue certificate"
           success="E-warranty issued and emailed"
-          run={async () => {
-            const res = await saveEWarranty(id, payload())
-            if (!res.ok) return res
-            return issueEWarranty(id)
-          }}
-        />
+          run={() => issueEWarranty(id)}
+        >
+          {issueOpen && <CertificatePreview key={previewKey} src={`${previewUrl}&v=${previewKey}`} />}
+        </ActionDrawer>
+        <AssignInspector id={id} inspectors={inspectors} />
         <ActionDrawer
           trigger={<Button variant="destructive" className="h-10 flex-1 sm:flex-none" />}
           label={<><IconX data-icon="inline-start" />Don&apos;t issue</>}
@@ -192,5 +216,42 @@ export function EWarrantyEditor({
         </ActionDrawer>
       </ActionBar>
     </>
+  )
+}
+
+function AssignInspector({ id, inspectors }: { id: string; inspectors: Option[] }) {
+  const [inspector, setInspector] = useState("")
+  const [when, setWhen] = useState("")
+  return (
+    <ActionDrawer
+      trigger={<Button variant="outline" className="h-10 flex-1 sm:flex-none" />}
+      label={<><IconUserPlus data-icon="inline-start" />Assign inspector</>}
+      title="Assign a site inspector"
+      description="The inspector is emailed the WRN, customer and site details and the inspection form link. The customer is informed."
+      submitLabel="Assign inspector"
+      success="Inspector assigned"
+      run={async () => {
+        if (!inspector) return { ok: false, error: "Choose an inspector." }
+        return assignEWarrantyInspector(id, inspector, when ? new Date(when).toISOString() : null)
+      }}
+    >
+      <FormField label="Inspector" htmlFor="ew-inspector" required>
+        <Select value={inspector || null} onValueChange={(v) => setInspector((v as string) ?? "")} items={inspectors}>
+          <SelectTrigger id="ew-inspector" className="w-full">
+            <SelectValue placeholder="Choose an inspector" />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            {inspectors.map((i) => (
+              <SelectItem key={i.value} value={i.value}>
+                {i.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FormField>
+      <FormField label="Visit date and time" htmlFor="ew-visit-at" description="Optional. Set it once the visit is agreed with the customer.">
+        <Input id="ew-visit-at" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+      </FormField>
+    </ActionDrawer>
   )
 }

@@ -17,8 +17,7 @@ const care = await renderCarePlusCertificate({
 await writeFile(`${out}/care.pdf`, care)
 const ew = await renderEWarrantyCertificate({
   number: "EW/26/000001",
-  program: "LIFETIME",
-  title: "E-Warranty Certificate — Lifetime Products (Ply/BB)",
+  programs: [{ code: "LIFETIME", title: "E-Warranty Certificate — Lifetime Products (Ply/BB)" }],
   issued_at: "2026-10-10T16:00:00Z",
   customer_name: "Ramesh Kumar",
   customer_address: "Flat 4B, Lake Gardens Residency, 12 Southern Avenue, Kolkata, WEST BENGAL, 700029",

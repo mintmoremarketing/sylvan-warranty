@@ -35,6 +35,19 @@ export type Category = (typeof CATEGORIES)[number]["value"]
 export const categoryLabel = (c: string) =>
   CATEGORIES.find((x) => x.value === c)?.label ?? c
 
+/**
+ * Categories as the registration form shows them. "Plywood SylvanCare+" holds the three SylvanCare+
+ * plywoods, which are left out of "Plywood"; it is a form grouping, the product's category stays plywood.
+ */
+export const FORM_CATEGORIES = [
+  { value: "care_plus", label: "Plywood SylvanCare+" },
+  ...CATEGORIES,
+] as const
+export const inFormCategory = (p: { category: string; care_plus_years: number | null }, formCategory: string) =>
+  formCategory === "care_plus" ? p.category === "plywood" && p.care_plus_years != null : p.category === formCategory && !(p.category === "plywood" && p.care_plus_years != null)
+export const formCategoryOf = (p: { category: string; care_plus_years: number | null }) =>
+  p.category === "plywood" && p.care_plus_years != null ? "care_plus" : p.category
+
 export const PROPERTY_TYPES = [
   { value: "apartment", label: "Apartment / flat" },
   { value: "independent_house", label: "Independent house / villa" },
@@ -158,6 +171,7 @@ export const REGISTRATION_STATUS: Record<
 }
 
 export const REGISTRATION_QUEUES = [
+  { key: "all", label: "All", statuses: [] },
   { key: "new", label: "New", statuses: ["received"] },
   { key: "verification", label: "Verifying", statuses: ["under_verification"] },
   { key: "info", label: "Info requested", statuses: ["info_required"] },
@@ -166,8 +180,14 @@ export const REGISTRATION_QUEUES = [
   { key: "active", label: "Active", statuses: ["active"] },
   { key: "rejected", label: "Rejected", statuses: ["rejected"] },
   { key: "standard", label: "Standard only", statuses: ["not_applicable"] },
-  { key: "all", label: "All", statuses: [] },
 ] as const
+
+export const ITEM_REVIEW = {
+  pending: "To check",
+  approved: "Approved",
+  rejected: "Rejected",
+} as const
+export type ItemReview = keyof typeof ITEM_REVIEW
 
 // ---------------------------------------------------------------------------
 // Claim statuses

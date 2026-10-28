@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { IconCheck, IconExternalLink, IconMapPin, IconMessageReport, IconQuestionMark, IconX } from "@tabler/icons-react"
 
 import { FlagList } from "@/components/console/flag-list"
+import { ProductReview } from "@/components/console/product-review"
 import { CONSOLE_CARD, PageBody, PageHeader } from "@/components/console/page-header"
 import { RegistrationActions } from "@/components/console/registration-actions"
 import { DocumentList } from "@/components/document-list"
@@ -28,6 +29,7 @@ import { daysBetween, formatDate, formatDateTime } from "@/lib/domain/dates"
 import { formatMobile } from "@/lib/domain/format"
 import { fromSlug, toSlug } from "@/lib/domain/numbers"
 import { loadRegistration } from "@/lib/queries"
+import { reviewGroups } from "@/lib/review-groups"
 import { getSettings } from "@/lib/settings"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 
@@ -52,18 +54,16 @@ export default async function RegistrationReview({ params }: { params: Promise<{
   if (!reg) notFound()
 
   const db = supabaseAdmin()
-  const [settings, { data: flags }, { data: inspectors }, { data: reasons }, { data: dealers }, { data: staffNames }] = await Promise.all([
+  const [settings, { data: flags }, { data: inspectors }, { data: reasons }, { data: staffNames }] = await Promise.all([
     getSettings(),
     db.from("fraud_flags").select("id, code, severity, detail, status, cleared_reason").eq("registration_id", reg.id).is("claim_id", null).order("created_at"),
     db.from("staff").select("id, full_name, regions").contains("roles", ["inspector"]).eq("active", true).order("full_name"),
     db.from("reason_codes").select("code, label, context").in("context", ["registration_reject", "no_inspection"]).order("sort"),
-    db.from("dealers").select("id, authorised").in("id", reg.invoices.map((i) => i.dealer_id).filter(Boolean) as string[]),
     db.from("staff").select("id, full_name"),
   ])
   const nameOf = new Map((staffNames ?? []).map((s) => [s.id, s.full_name]))
   const openFlags = (flags ?? []).filter((f) => f.status === "open")
   const label = (list: readonly { value: string; label: string }[], v: string | null) => list.find((x) => x.value === v)?.label ?? v ?? "—"
-  const authorised = new Map((dealers ?? []).map((d) => [d.id, d.authorised]))
 
   const inspectorOptions = (inspectors ?? []).map((i) => ({
     value: i.id,
@@ -83,13 +83,13 @@ export default async function RegistrationReview({ params }: { params: Promise<{
     product_eligible: yes(careLines.length > 0),
     manufacture_date: yes(reg.invoices.every((i) => i.invoice_date >= care.manufacturedFrom)),
     within_period: yes(oldestInvoiceAge <= care.windowDays),
-    dealer: yes(reg.invoices.every((i) => !!i.dealer_id && authorised.get(i.dealer_id) !== false)),
     quantity_matches_invoice: yes(reg.items.every((i) => i.qty_used <= i.qty_purchased)),
     not_already_registered: yes(!openCodes.has("duplicate_invoice") && !openCodes.has("duplicate_invoice_file")),
     no_duplicate: yes(!openCodes.has("site_reused")),
   }
   const saved = reg.verification?.checks as Record<VerificationKey, VerificationResult> | undefined
   const decisionDocs = reg.documents.filter((d) => d.kind === "decision_evidence")
+  const groups = reviewGroups(reg, staff, nameOf)
 
   return (
     <>
@@ -114,6 +114,18 @@ export default async function RegistrationReview({ params }: { params: Promise<{
             </CardHeader>
             <CardContent>
               <FlagList flags={flags ?? []} canClear={hasRole(staff, ["verifier", "approver"])} />
+            </CardContent>
+          </Card>
+        )}
+
+        {groups.length > 0 && (
+          <Card className={CONSOLE_CARD}>
+            <CardHeader>
+              <CardTitle>Product checks</CardTitle>
+              <CardDescription>Check each product against the invoice and photos. Each certificate lists only its approved products.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProductReview groups={groups} />
             </CardContent>
           </Card>
         )}
@@ -192,14 +204,13 @@ export default async function RegistrationReview({ params }: { params: Promise<{
                   </CardHeader>
                   <CardContent className="flex flex-col gap-4">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Dealer</span>
                       <span className="font-medium">{inv.dealer_name}</span>
-                      {inv.dealer_id ? (
-                        authorised.get(inv.dealer_id) ? <Badge variant="secondary">Authorised dealer</Badge> : <Badge variant="destructive">Not authorised</Badge>
-                      ) : (
-                        <Badge variant="outline">Not on dealer list</Badge>
+                      {inv.dealer_phone && (
+                        <a href={`tel:${inv.dealer_phone}`} className="text-muted-foreground underline-offset-4 hover:underline">
+                          {formatMobile(inv.dealer_phone)}
+                        </a>
                       )}
-                      {inv.dealer_gstin && <span className="font-mono text-muted-foreground">GSTIN {inv.dealer_gstin}</span>}
-                      {inv.dealer_phone && <span className="text-muted-foreground">{formatMobile(inv.dealer_phone)}</span>}
                       {inv.batch_code && <Badge variant="outline">Batch {inv.batch_code}</Badge>}
                     </div>
                     <DocumentList docs={reg.documents.filter((d) => d.invoice_id === inv.id)} />
@@ -223,8 +234,7 @@ export default async function RegistrationReview({ params }: { params: Promise<{
                             <TableCell className="text-right tabular-nums">{i.qty_used}</TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
-                                {i.care_plus && <Badge>SylvanCare+</Badge>}
-                                {i.standard && <Badge variant="secondary">Standard</Badge>}
+                                {i.care_plus ? <Badge>SylvanCare+</Badge> : i.standard && <Badge variant="secondary">Standard</Badge>}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -321,16 +331,16 @@ export default async function RegistrationReview({ params }: { params: Promise<{
             {reg.eWarranties.length > 0 && (
               <Card className={CONSOLE_CARD}>
                 <CardHeader>
-                  <CardTitle>Standard e-warranties</CardTitle>
+                  <CardTitle>Standard e-warranty</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2">
                   {reg.eWarranties.map((e) => (
                     <Item key={e.id} variant="outline" size="sm" render={<Link href={`/console/e-warranties/${e.id}`} />}>
                       <ItemContent>
                         <ItemTitle>
-                          {e.program === "LIFETIME" ? "Lifetime" : e.program === "WPC" ? "WPC" : "710 / 303 / BB / FD"} <EWarrantyBadge status={e.status} audience="staff" />
+                          {e.number ?? "Not issued yet"} <EWarrantyBadge status={e.status} audience="staff" />
                         </ItemTitle>
-                        <ItemDescription>{e.number ?? "Not issued yet"}</ItemDescription>
+                        <ItemDescription>{e.e_warranty_items.map((i) => i.product_name).join(", ")}</ItemDescription>
                       </ItemContent>
                       <IconExternalLink className="size-4 text-muted-foreground" />
                     </Item>
@@ -393,6 +403,7 @@ export default async function RegistrationReview({ params }: { params: Promise<{
           noInspectionReasons={(reasons ?? []).filter((r) => r.context === "no_inspection").map((r) => ({ value: r.code, label: r.label }))}
           checks={saved ?? suggested}
           verified={!!reg.verified_at}
+          previewUrl={`/api/certificates/care-plus/${ref}?preview=1`}
         />
       </PageBody>
     </>

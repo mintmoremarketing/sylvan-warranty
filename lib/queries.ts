@@ -29,6 +29,10 @@ export type RegistrationItem = {
   care_start: string | null
   care_expiry: string | null
   utilised_qty: number
+  review_status: "pending" | "approved" | "rejected"
+  review_note: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
 }
 
 export type RegistrationInvoice = {
@@ -36,10 +40,8 @@ export type RegistrationInvoice = {
   position: number
   invoice_number: string
   invoice_date: string
-  dealer_id: string | null
   dealer_name: string
   dealer_phone: string | null
-  dealer_gstin: string | null
   batch_code: string | null
 }
 
@@ -57,7 +59,7 @@ export type EWarranty = {
   coordinator_id: string | null
   issued_at: string | null
   reject_reason: string | null
-  e_warranty_items: { id: string; product_id: string; product_name: string; category: string; qty: number; warranty_period: string; invoice_number: string }[]
+  e_warranty_items: { id: string; item_id: string | null; program: string | null; product_id: string; product_name: string; category: string; qty: number; warranty_period: string; invoice_number: string }[]
 }
 
 export type InfoRequest = {

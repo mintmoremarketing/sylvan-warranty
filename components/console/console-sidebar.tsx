@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  IconBuildingStore,
   IconCertificate,
   IconChartBar,
   IconClipboardCheck,
@@ -59,7 +58,6 @@ const INSIGHT: NavItem[] = [
 const SETTINGS: NavItem[] = [
   { href: "/console/settings/staff", label: "Staff & roles", icon: IconUsers, roles: [] },
   { href: "/console/settings/products", label: "Products", icon: IconPackage, roles: [] },
-  { href: "/console/settings/dealers", label: "Dealers", icon: IconBuildingStore, roles: ["admin"] },
   { href: "/console/settings/general", label: "SLA & rules", icon: IconSettings, roles: [] },
 ]
 

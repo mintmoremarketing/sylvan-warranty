@@ -1,26 +1,18 @@
 "use client"
 
-import { IconBuildingStore, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react"
+import { IconPlus, IconTrash } from "@tabler/icons-react"
 
 import { DatePicker } from "@/components/date-picker"
 import { FileUploader, type UploadItem } from "@/components/file-uploader"
 import { FormField } from "@/components/form-field"
 import { PhoneInput } from "@/components/phone-input"
-import { newItem, type DealerOption, type InvoiceDraft, type ItemDraft } from "@/components/registration/form-state"
+import { newItem, type InvoiceDraft, type ItemDraft } from "@/components/registration/form-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/components/ui/combobox"
 import { FieldDescription, FieldError, FieldGroup, FieldLegend, FieldSeparator, FieldSet } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CATEGORIES } from "@/lib/domain/constants"
+import { FORM_CATEGORIES, inFormCategory } from "@/lib/domain/constants"
 import { shiftDate } from "@/lib/domain/dates"
 import {
   lineEligibility,
@@ -33,7 +25,6 @@ type Props = {
   invoice: InvoiceDraft
   index: number
   products: ProductRef[]
-  dealers: DealerOption[]
   settings: EligibilitySettings
   today: string
   error: (key: string) => string | undefined
@@ -42,7 +33,7 @@ type Props = {
   onRemove: () => void
 }
 
-export function InvoiceCard({ invoice, index, products, dealers, settings, today, error, canRemove, onChange, onRemove }: Props) {
+export function InvoiceCard({ invoice, index, products, settings, today, error, canRemove, onChange, onRemove }: Props) {
   const id = (f: string) => `inv-${invoice.id}-${f}`
   const e = (f: string) => error(`invoices.${index}.${f}`)
   const set = <K extends keyof InvoiceDraft>(key: K, value: InvoiceDraft[K]) => onChange((inv) => ({ ...inv, [key]: value }))
@@ -109,73 +100,14 @@ export function InvoiceCard({ invoice, index, products, dealers, settings, today
         </div>
 
         {/* Dealer */}
-        {!invoice.dealer_manual ? (
-          <FormField
-            label="Dealer / sub-dealer"
-            htmlFor={id("dealer")}
-            required
-            error={e("dealer_name")}
-            description={
-              <Button type="button" variant="link" className="h-auto p-0 text-sm" onClick={() => set("dealer_manual", true)}>
-                <IconPencil data-icon="inline-start" />
-                My dealer isn&apos;t listed
-              </Button>
-            }
-          >
-            <Combobox
-              items={dealers}
-              value={invoice.dealer}
-              onValueChange={(v) => set("dealer", (v as DealerOption | null) ?? null)}
-              itemToStringLabel={(d: DealerOption) => d.name}
-              isItemEqualToValue={(a: DealerOption, b: DealerOption) => a.id === b.id}
-            >
-              <ComboboxInput id={id("dealer")} placeholder="Search dealer by name" className="w-full" aria-invalid={!!e("dealer_name")} />
-              <ComboboxContent>
-                <ComboboxEmpty>No dealer found. Use “My dealer isn&apos;t listed”.</ComboboxEmpty>
-                <ComboboxList>
-                  {(d: DealerOption) => (
-                    <ComboboxItem key={d.id} value={d}>
-                      <IconBuildingStore className="text-muted-foreground" />
-                      <span className="flex flex-col">
-                        <span>{d.name}</span>
-                        {d.city && <span className="text-xs text-muted-foreground">{d.city}</span>}
-                      </span>
-                    </ComboboxItem>
-                  )}
-                </ComboboxList>
-              </ComboboxContent>
-            </Combobox>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <FormField label="Dealer / sub-dealer name" htmlFor={id("dealer-name")} required error={e("dealer_name")} description="As printed on the invoice">
+            <Input id={id("dealer-name")} value={invoice.dealer_name} onChange={(ev) => set("dealer_name", ev.target.value)} aria-invalid={!!e("dealer_name")} maxLength={120} />
           </FormField>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-3">
-            <FormField
-              label="Dealer name"
-              htmlFor={id("dealer-name")}
-              required
-              error={e("dealer_name")}
-              className="sm:col-span-3"
-              description={
-                <Button type="button" variant="link" className="h-auto p-0 text-sm" onClick={() => set("dealer_manual", false)}>
-                  Choose from the dealer list instead
-                </Button>
-              }
-            >
-              <Input id={id("dealer-name")} value={invoice.dealer_name} onChange={(ev) => set("dealer_name", ev.target.value)} aria-invalid={!!e("dealer_name")} maxLength={120} />
-            </FormField>
-            <FormField label="Dealer phone" htmlFor={id("dealer-phone")} required error={e("dealer_phone")} className="sm:col-span-1">
-              <PhoneInput id={id("dealer-phone")} value={invoice.dealer_phone} onValueChange={(v) => set("dealer_phone", v)} aria-invalid={!!e("dealer_phone")} />
-            </FormField>
-            <FormField label="Dealer GSTIN" htmlFor={id("dealer-gstin")} error={e("dealer_gstin")} className="sm:col-span-2" description="Printed on the invoice (15 characters)">
-              <Input
-                id={id("dealer-gstin")}
-                value={invoice.dealer_gstin}
-                onChange={(ev) => set("dealer_gstin", ev.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15))}
-                aria-invalid={!!e("dealer_gstin")}
-                className="font-mono uppercase"
-              />
-            </FormField>
-          </div>
-        )}
+          <FormField label="Dealer phone number" htmlFor={id("dealer-phone")} required error={e("dealer_phone")}>
+            <PhoneInput id={id("dealer-phone")} value={invoice.dealer_phone} onValueChange={(v) => set("dealer_phone", v)} aria-invalid={!!e("dealer_phone")} />
+          </FormField>
+        </div>
 
         {needsBatch && (
           <FormField
@@ -204,7 +136,7 @@ export function InvoiceCard({ invoice, index, products, dealers, settings, today
                 ? lineEligibility(product, invoice.invoice_date, today, settings)
                 : null
             const takenElsewhere = new Set(invoice.items.filter((x) => x.id !== item.id).map((x) => x.product_id))
-            const options = products.filter((p) => p.category === item.category && (p.id === item.product_id || !takenElsewhere.has(p.id)))
+            const options = products.filter((p) => inFormCategory(p, item.category) && (p.id === item.product_id || !takenElsewhere.has(p.id)))
 
             return (
               <div key={item.id} className="flex flex-col gap-3 rounded-lg bg-muted/60 p-3">
@@ -224,12 +156,12 @@ export function InvoiceCard({ invoice, index, products, dealers, settings, today
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField label="Category" htmlFor={id(`${item.id}-cat`)} required>
-                    <Select value={item.category || null} onValueChange={(v) => setItem(item.id, { category: v ?? "", product_id: "" })} items={CATEGORIES}>
+                    <Select value={item.category || null} onValueChange={(v) => setItem(item.id, { category: v ?? "", product_id: "" })} items={FORM_CATEGORIES}>
                       <SelectTrigger id={id(`${item.id}-cat`)} className="w-full bg-background">
-                        <SelectValue placeholder="Plywood, blockboard…" />
+                        <SelectValue placeholder="Plywood SylvanCare+, plywood…" />
                       </SelectTrigger>
                       <SelectContent alignItemWithTrigger={false}>
-                        {CATEGORIES.map((c) => (
+                        {FORM_CATEGORIES.map((c) => (
                           <SelectItem key={c.value} value={c.value}>
                             {c.label}
                           </SelectItem>
@@ -251,7 +183,6 @@ export function InvoiceCard({ invoice, index, products, dealers, settings, today
                         {options.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
                             {p.name}
-                            {p.care_plus_years ? <Badge variant="secondary" className="ml-auto">SylvanCare+</Badge> : null}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -289,7 +220,7 @@ export function InvoiceCard({ invoice, index, products, dealers, settings, today
                     {elig.standard ? (
                       <Badge variant="secondary">Standard e-warranty · {product?.standard_period}</Badge>
                     ) : (
-                      <Badge variant="outline">{elig.standardNote}</Badge>
+                      !elig.carePlus && <Badge variant="outline">{elig.standardNote}</Badge>
                     )}
                     {product?.coverage_note && <Badge variant="outline">{product.coverage_note}</Badge>}
                   </div>

@@ -37,7 +37,7 @@ type Row = {
 
 export default async function RegistrationsQueue({ searchParams }: { searchParams: Promise<{ q?: string; s?: string }> }) {
   await requireStaff(["verifier", "approver", "customer_care", "management"], "/console/registrations")
-  const { q = "new", s = "" } = await searchParams
+  const { q = "all", s = "" } = await searchParams
   const queue = REGISTRATION_QUEUES.find((x) => x.key === q) ?? REGISTRATION_QUEUES[0]
   const search = s.trim()
 
@@ -121,9 +121,9 @@ export default async function RegistrationsQueue({ searchParams }: { searchParam
                   </TableHeader>
                   <TableBody>
                     {rows.map((r) => (
-                      <TableRow key={r.id}>
+                      <TableRow key={r.id} className="relative cursor-pointer">
                         <TableCell>
-                          <Link href={`/console/registrations/${toSlug(r.wrn)}`} className="font-mono font-medium hover:underline">
+                          <Link href={`/console/registrations/${toSlug(r.wrn)}`} className="font-mono font-medium after:absolute after:inset-0 hover:underline">
                             {r.wrn}
                           </Link>
                           {r.channel !== "self" && <div className="text-xs text-muted-foreground">Assisted ({r.channel.replace("_", " ")})</div>}

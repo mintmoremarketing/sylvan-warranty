@@ -47,10 +47,8 @@ export function normalizeRegistration(raw: unknown): RegistrationInput {
         files: cleanFiles(i.files, 10),
         invoice_number: str(i.invoice_number, 40),
         invoice_date: str(i.invoice_date, 10),
-        dealer_id: str(i.dealer_id, 40),
         dealer_name: str(i.dealer_name, 120),
         dealer_phone: digits(i.dealer_phone, 11),
-        dealer_gstin: str(i.dealer_gstin, 15).toUpperCase(),
         batch_code: str(i.batch_code, 40),
         items: list(i.items, 30).map((y) => {
           const it = (y ?? {}) as Record<string, unknown>
@@ -73,22 +71,6 @@ export async function prepareRegistration(raw: unknown, uploaderId: string): Pro
   const [settings, productList] = await Promise.all([getSettings(), getProducts()])
   const products = new Map(productList.map((p) => [p.id, p as ProductRef]))
   const { errors, lines } = validateRegistration(input, { products, settings: settings.eligibility, today: todayIST() })
-
-  // Dealer picked from the list must exist; its name and GSTIN come from the master, not the browser.
-  const dealerIds = [...new Set(input.invoices.map((i) => i.dealer_id).filter(Boolean))]
-  if (dealerIds.length) {
-    const { data: dealers } = await supabaseAdmin().from("dealers").select("id, name, gstin").in("id", dealerIds).eq("active", true)
-    const byId = new Map((dealers ?? []).map((d) => [d.id, d]))
-    input.invoices.forEach((inv, i) => {
-      if (!inv.dealer_id) return
-      const d = byId.get(inv.dealer_id)
-      if (!d) errors[`invoices.${i}.dealer_name`] = "Select a dealer from the list"
-      else {
-        inv.dealer_name = d.name
-        inv.dealer_gstin = d.gstin ?? ""
-      }
-    })
-  }
 
   const files = [...input.invoices.flatMap((i) => i.files), ...input.site_photos]
   if (!(await verifyUploads(uploaderId, files))) {
@@ -230,12 +212,12 @@ export async function runFraudChecks(registrationId: string) {
   const db = supabaseAdmin()
   const { data: reg } = await db
     .from("registrations")
-    .select("id, wrn, customer_id, owner_mobile, site_address, pincode, registration_invoices(id, invoice_number, invoice_number_norm, dealer_id, dealer_name)")
+    .select("id, wrn, customer_id, owner_mobile, site_address, pincode, registration_invoices(id, invoice_number, invoice_number_norm)")
     .eq("id", registrationId)
     .single()
   if (!reg) return
   const flags: { registration_id: string; code: string; severity: string; detail: string; related_wrn?: string }[] = []
-  const invoices = reg.registration_invoices as { id: string; invoice_number: string; invoice_number_norm: string; dealer_id: string | null; dealer_name: string }[]
+  const invoices = reg.registration_invoices as { id: string; invoice_number: string; invoice_number_norm: string }[]
 
   for (const inv of invoices) {
     const { data: dupes } = await db
@@ -248,8 +230,6 @@ export async function runFraudChecks(registrationId: string) {
       const wrn = (d.registrations as unknown as { wrn: string }).wrn
       flags.push({ registration_id: reg.id, code: "duplicate_invoice", severity: "high", detail: `Invoice ${inv.invoice_number} is also registered under ${wrn}`, related_wrn: wrn })
     }
-    if (!inv.dealer_id)
-      flags.push({ registration_id: reg.id, code: "unlisted_dealer", severity: "warning", detail: `Dealer "${inv.dealer_name}" isn't on the authorised dealer list` })
   }
 
   const { data: docs } = await db.from("documents").select("sha256").eq("registration_id", reg.id).eq("kind", "invoice").not("sha256", "is", null)

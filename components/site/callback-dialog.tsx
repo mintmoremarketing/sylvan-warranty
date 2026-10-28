@@ -30,13 +30,17 @@ export function CallbackDialog({
   render,
   children,
   defaultTopic,
+  defaults,
 }: {
   render: React.ReactElement
   children: React.ReactNode
   defaultTopic?: string
+  /** Pre-filled for a signed-in customer, e.g. the product they need help with in `message`. */
+  defaults?: { name?: string; mobile?: string; email?: string; message?: string }
 }) {
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ name: "", mobile: "", email: "", topic: defaultTopic ?? "", message: "" })
+  const blank = { name: defaults?.name ?? "", mobile: defaults?.mobile ?? "", email: defaults?.email ?? "", topic: defaultTopic ?? "", message: defaults?.message ?? "" }
+  const [form, setForm] = useState(blank)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [pending, start] = useTransition()
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
@@ -54,7 +58,7 @@ export function CallbackDialog({
               if (!res.ok) return setErrors(res.errors)
               toast.success("Thanks — our customer care team will call you back shortly.")
               setOpen(false)
-              setForm({ name: "", mobile: "", email: "", topic: defaultTopic ?? "", message: "" })
+              setForm(blank)
               setErrors({})
             })
           }}

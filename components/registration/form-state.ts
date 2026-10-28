@@ -1,8 +1,6 @@
 import { doneFiles, type UploadItem } from "@/components/file-uploader"
 import type { FieldErrors, RegistrationInput } from "@/lib/domain/registration"
 
-export type DealerOption = { id: string; name: string; city: string | null; gstin: string | null }
-
 export type ItemDraft = { id: string; category: string; product_id: string; qty_purchased: string; qty_used: string }
 
 export type InvoiceDraft = {
@@ -10,11 +8,8 @@ export type InvoiceDraft = {
   files: UploadItem[]
   invoice_number: string
   invoice_date: string
-  dealer: DealerOption | null
-  dealer_manual: boolean
   dealer_name: string
   dealer_phone: string
-  dealer_gstin: string
   batch_code: string
   items: ItemDraft[]
 }
@@ -41,11 +36,8 @@ export const newInvoice = (id = uid(), firstItemId?: string): InvoiceDraft => ({
   files: [],
   invoice_number: "",
   invoice_date: "",
-  dealer: null,
-  dealer_manual: false,
   dealer_name: "",
   dealer_phone: "",
-  dealer_gstin: "",
   batch_code: "",
   items: [newItem(firstItemId)],
 })
@@ -99,10 +91,8 @@ export function toInput(d: RegistrationDraft): RegistrationInput {
       files: doneFiles(inv.files),
       invoice_number: inv.invoice_number,
       invoice_date: inv.invoice_date,
-      dealer_id: inv.dealer_manual ? "" : (inv.dealer?.id ?? ""),
-      dealer_name: inv.dealer_manual ? inv.dealer_name : (inv.dealer?.name ?? ""),
-      dealer_phone: inv.dealer_manual ? inv.dealer_phone : "",
-      dealer_gstin: inv.dealer_manual ? inv.dealer_gstin.toUpperCase() : (inv.dealer?.gstin ?? ""),
+      dealer_name: inv.dealer_name,
+      dealer_phone: inv.dealer_phone,
       batch_code: inv.batch_code,
       items: inv.items.map(({ product_id, qty_purchased, qty_used }) => ({ product_id, qty_purchased, qty_used })),
     })),

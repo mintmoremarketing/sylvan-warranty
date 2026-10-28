@@ -45,7 +45,7 @@ export default async function EWarrantiesPage({ searchParams }: { searchParams: 
     .select("id, number, status, customer_name, dealer_name, invoice_number, created_at, warranty_programs(name), registrations!inner(wrn, city), e_warranty_items(product_name, qty), coordinator:coordinator_id(full_name)")
     .order("created_at", { ascending: tab.key === "pending" })
     .limit(100)
-  if (!seeAll) query = query.eq("coordinator_id", staff.id)
+  if (!seeAll) query = query.or(`coordinator_id.eq.${staff.id},coordinator_id.is.null`)
   if (tab.statuses.length) query = query.in("status", tab.statuses)
   if (s.trim()) {
     const term = s.trim().replace(/[%,()]/g, "")
@@ -56,7 +56,7 @@ export default async function EWarrantiesPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader title="Standard e-warranties" description={seeAll ? "All e-warranty requests across coordinators." : "E-warranty requests from your dealers. Review, correct and issue."}>
+      <PageHeader title="Standard e-warranties" description={seeAll ? "All e-warranty requests across coordinators." : "E-warranty requests assigned to you or not yet picked up. Check each product, correct and issue."}>
         <QueueControls basePath="/console/e-warranties" tabs={TABS} current={tab.key} search={s} placeholder="Search customer, dealer, invoice or certificate no." />
       </PageHeader>
       <PageBody>
@@ -78,8 +78,6 @@ export default async function EWarrantiesPage({ searchParams }: { searchParams: 
                         {r.customer_name} · {r.registrations.city}
                       </ItemTitle>
                       <ItemDescription className="line-clamp-none">
-                        {r.warranty_programs.name}
-                        <br />
                         {r.e_warranty_items.map((i) => `${i.product_name} × ${i.qty}`).join(", ")} · {r.dealer_name} · inv {r.invoice_number}
                         {seeAll && r.coordinator && ` · ${r.coordinator.full_name}`}
                       </ItemDescription>

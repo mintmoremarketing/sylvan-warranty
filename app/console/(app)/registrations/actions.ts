@@ -56,7 +56,6 @@ export async function saveVerification(id: string, results: Record<string, Verif
   if (Object.values(checks).some((v) => v !== "ok" && v !== "issue")) return { ok: false, error: "Mark every check as OK or Issue." }
   const issues = VERIFICATION_CHECKS.filter((c) => checks[c.key] === "issue").map((c) => c.label)
   const note = remarks.trim().slice(0, 1000)
-  if (issues.length && note.length < 5) return { ok: false, error: "Add remarks describing the issues found." }
 
   const now = new Date().toISOString()
   const { error } = await supabaseAdmin()
@@ -72,6 +71,52 @@ export async function saveVerification(id: string, results: Record<string, Verif
     actor_label: staffLabel(a.staff),
     remarks: note || null,
     data: { issues },
+  })
+  revalidatePath("/console", "layout")
+  return { ok: true }
+}
+
+/**
+ * Each product on a registration is checked on its own. SylvanCare+ products are checked by the backend team
+ * (or the approver) until the SylvanCare+ decision; standard products also by the sales coordinator, until the
+ * e-warranty is issued. Only approved products go on the certificates.
+ */
+export async function reviewItem(itemId: string, decision: "approved" | "rejected" | "pending", remarks: string): Promise<ActionResult> {
+  const a = await staffForAction(["verifier", "approver", "sales_coordinator"])
+  if (!a.ok) return a
+  if (!["approved", "rejected", "pending"].includes(decision)) return { ok: false, error: "Choose approve or reject." }
+  const db = supabaseAdmin()
+  const { data: item } = await db
+    .from("registration_items")
+    .select("id, registration_id, product_name, care_plus, standard, review_status, registrations(status), e_warranty_items(e_warranties(status))")
+    .eq("id", itemId)
+    .maybeSingle()
+  if (!item) return { ok: false, error: "Product not found." }
+  const regStatus = (item.registrations as unknown as { status: string }).status
+  const ewStatus = (item.e_warranty_items as unknown as { e_warranties: { status: string } | null }[])[0]?.e_warranties?.status
+
+  if (item.care_plus) {
+    if (!hasRole(a.staff, ["verifier", "approver"])) return { ok: false, error: "SylvanCare+ products are checked by the backend team." }
+    if (["active", "rejected", "approved"].includes(regStatus)) return { ok: false, error: "The SylvanCare+ decision has already been made." }
+  } else {
+    if (!item.standard) return { ok: false, error: "This product isn't covered by either warranty." }
+    if (ewStatus !== "pending_review") return { ok: false, error: "The e-warranty has already been decided." }
+  }
+
+  const note = remarks.trim().slice(0, 500)
+  const { error } = await db
+    .from("registration_items")
+    .update({ review_status: decision, review_note: note || null, reviewed_by: decision === "pending" ? null : a.staff.id, reviewed_at: decision === "pending" ? null : new Date().toISOString() })
+    .eq("id", itemId)
+  if (error) return { ok: false, error: "Couldn't save the check." }
+  await audit({
+    registration_id: item.registration_id,
+    entity: "registration",
+    action: decision === "pending" ? "product_check_reset" : `product_${decision}`,
+    actor_staff: a.staff.id,
+    actor_label: staffLabel(a.staff),
+    remarks: note || null,
+    data: { product: item.product_name, programme: item.care_plus ? "SylvanCare+" : "Standard" },
   })
   revalidatePath("/console", "layout")
   return { ok: true }
@@ -243,6 +288,9 @@ export async function approveRegistration(id: string, remarks: string, rawFiles:
   const r = await reg(id)
   if (!r) return { ok: false, error: "Not found." }
   if (!APPROVAL_STAGE.includes(r.status)) return { ok: false, error: "This registration isn't ready for approval." }
+  const { data: careItems } = await supabaseAdmin().from("registration_items").select("review_status").eq("registration_id", id).eq("care_plus", true)
+  if ((careItems ?? []).some((i) => i.review_status === "pending")) return { ok: false, error: "Approve or reject each SylvanCare+ product first." }
+  if (!(careItems ?? []).some((i) => i.review_status === "approved")) return { ok: false, error: "No SylvanCare+ product is approved. Reject the registration instead." }
   const evidence = await attachEvidence(a.staff, id, rawFiles)
   if (!evidence.ok) return evidence
 
@@ -262,7 +310,7 @@ export async function approveRegistration(id: string, remarks: string, rawFiles:
   })
   if (!activated.ok) return activated
 
-  const { data: items } = await supabaseAdmin().from("registration_items").select("product_name, qty_used, care_expiry").eq("registration_id", id).eq("care_plus", true)
+  const { data: items } = await supabaseAdmin().from("registration_items").select("product_name, qty_used, care_expiry").eq("registration_id", id).eq("care_plus", true).eq("review_status", "approved")
   const coverage = (items ?? []).map((i) => `${i.product_name}: ${i.qty_used} sheets, valid till ${formatDate(i.care_expiry)}`).join("; ")
   await notify("certificate_issued", r.owner_email, { name: r.owner_name, wrn: r.wrn, slug: toSlug(r.wrn), coverage: `Coverage — ${coverage}.` }, { registration_id: id })
   return { ok: true }

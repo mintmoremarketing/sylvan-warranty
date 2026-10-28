@@ -15,6 +15,7 @@ import {
   startVerification,
 } from "@/app/console/(app)/registrations/actions"
 import { ActionBar, ActionDrawer } from "@/components/console/action-drawer"
+import { CertificatePreview } from "@/components/console/certificate-preview"
 import { doneFiles, FileUploader, isUploading, type UploadItem } from "@/components/file-uploader"
 import { FormField } from "@/components/form-field"
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,8 @@ type Props = {
   /** Saved verification, or the system's suggestions when none is saved yet. */
   checks: Checks
   verified: boolean
+  /** The SylvanCare+ certificate as it will be issued, shown before approving. */
+  previewUrl: string
 }
 
 const APPROVAL_STAGE = ["pending_approval", "inspection_completed"]
@@ -50,7 +53,7 @@ const can = (roles: Role[], allowed: Role[]) => roles.includes("admin") || allow
  * executive verifies, asks for information, decides on inspection and assigns the inspector; the authorised
  * approver approves or rejects.
  */
-export function RegistrationActions({ id, status, roles, inspectors, rejectReasons, noInspectionReasons, checks, verified }: Props) {
+export function RegistrationActions({ id, status, roles, inspectors, rejectReasons, noInspectionReasons, checks, verified, previewUrl }: Props) {
   const router = useRouter()
   const started = useRef(false)
   const backend = can(roles, ["verifier"])
@@ -78,7 +81,7 @@ export function RegistrationActions({ id, status, roles, inspectors, rejectReaso
       {backend && ["inspection_required", "inspector_assigned"].includes(status) && (
         <AssignInspector id={id} inspectors={inspectors} reassign={status === "inspector_assigned"} />
       )}
-      {approver && atApproval && <Approve id={id} />}
+      {approver && atApproval && <Approve id={id} previewUrl={previewUrl} />}
       {((backend && status === "under_verification") || (approver && atApproval)) && <RequestInfo id={id} />}
       {approver && atApproval && <Reject id={id} reasons={rejectReasons} />}
       {status === "info_required" && <p className="self-center text-sm text-muted-foreground">Waiting for the customer to upload the requested information.</p>}
@@ -124,8 +127,7 @@ function Verify({ id, initial, saved }: { id: string; initial: Checks; saved: bo
       <FormField
         label="Remarks"
         htmlFor="verify-remarks"
-        required={issues > 0}
-        description={issues > 0 ? "Describe the issues. If they can be corrected, request additional information next." : undefined}
+        description={issues > 0 ? "Optional. Describe the issues; if they can be corrected, request additional information next." : "Optional."}
       >
         <Textarea id="verify-remarks" rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
       </FormField>
@@ -231,14 +233,15 @@ function Evidence({ id, files, setFiles }: { id: string; files: UploadItem[]; se
   )
 }
 
-function Approve({ id }: { id: string }) {
+function Approve({ id, previewUrl }: { id: string; previewUrl: string }) {
   const [remarks, setRemarks] = useState("")
   const [files, setFiles] = useState<UploadItem[]>([])
   return (
     <ActionDrawer
       trigger={<Button className="flex-1 sm:flex-none" />}
       title="Approve registration"
-      description="Status moves to Approved. The system then activates the warranty, generates the certificate and emails it to the site owner."
+      description="Check the certificate below. Status moves to Approved; the system then activates the warranty, issues this certificate and emails it to the site owner."
+      wide
       submitLabel="Approve"
       success="Approved — warranty active and certificate emailed"
       run={async () => {
@@ -247,6 +250,7 @@ function Approve({ id }: { id: string }) {
       }}
       label={<><IconCheck data-icon="inline-start" />Approve</>}
     >
+      <CertificatePreview src={previewUrl} />
       <FormField label="Remarks" htmlFor="approve-remarks" required description="Mandatory for every decision. Your name, user ID and the time are recorded.">
         <Textarea id="approve-remarks" rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
       </FormField>

@@ -41,7 +41,8 @@ export default async function RegistrationPage({ params }: { params: Promise<{ r
   const revisit = reg.inspections.findLast((i) => i.kind === "registration")?.status === "revisit_required"
   const rejection = reg.status === "rejected" ? await rejectionReason(reg.id) : null
   const careItems = reg.items.filter((i) => i.care_plus)
-  const expiry = careItems.map((i) => i.care_expiry).filter(Boolean).sort().pop() ?? null
+  const covered = careItems.filter((i) => i.review_status !== "rejected")
+  const expiry = covered.map((i) => i.care_expiry).filter(Boolean).sort().pop() ?? null
   const expired = reg.status === "active" && !!expiry && expiry < todayIST()
   const canClaim = reg.status === "active" && !expired && !reg.claim_locked_at
   const slug = toSlug(reg.wrn)
@@ -143,7 +144,9 @@ export default async function RegistrationPage({ params }: { params: Promise<{ r
                   <TableRow key={i.id}>
                     <TableCell>{i.product_name}</TableCell>
                     <TableCell>{i.qty_used} sheets</TableCell>
-                    <TableCell className="whitespace-normal">{i.care_start ? `${formatDate(i.care_start)} – ${formatDate(i.care_expiry)}` : "After approval"}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      {i.review_status === "rejected" ? "Not covered after verification" : i.care_start ? `${formatDate(i.care_start)} – ${formatDate(i.care_expiry)}` : "After approval"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

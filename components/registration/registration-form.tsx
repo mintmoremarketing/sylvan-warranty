@@ -14,7 +14,6 @@ import {
   initialDraft,
   newInvoice,
   toInput,
-  type DealerOption,
   type InvoiceDraft,
   type RegistrationDraft,
   type SubmitResult,
@@ -62,7 +61,6 @@ type Props = {
   mode: "customer" | "assisted"
   defaults: { email: string; name?: string | null; mobile?: string | null }
   products: ProductRef[]
-  dealers: DealerOption[]
   settings: EligibilitySettings
   today: string
   submit: (input: RegistrationInput) => Promise<SubmitResult>
@@ -79,7 +77,7 @@ function scrollToFirstError() {
   })
 }
 
-export function RegistrationForm({ mode, defaults, products, dealers, settings, today, submit, confirmConsent, doneBase }: Props) {
+export function RegistrationForm({ mode, defaults, products, settings, today, submit, confirmConsent, doneBase }: Props) {
   const router = useRouter()
   const [draft, setDraft] = useState<RegistrationDraft>(() => initialDraft(defaults))
   const [showErrors, setShowErrors] = useState(false)
@@ -274,7 +272,6 @@ export function RegistrationForm({ mode, defaults, products, dealers, settings, 
                   invoice={inv}
                   index={i}
                   products={products}
-                  dealers={dealers}
                   settings={settings}
                   today={today}
                   error={error}

@@ -18,13 +18,13 @@ const OPEN = ["assigned", "scheduled", "revisit_required"]
 async function loadInspection(id: string) {
   const { data } = await supabaseAdmin()
     .from("inspections")
-    .select("id, kind, status, inspector_id, registration_id, claim_id, registrations(wrn, owner_name, owner_email), claims(claim_no), staff:inspector_id(full_name)")
+    .select("id, kind, status, inspector_id, registration_id, claim_id, registrations(wrn, status, owner_name, owner_email), claims(claim_no), staff:inspector_id(full_name)")
     .eq("id", id)
     .maybeSingle()
   if (!data) return null
   return {
     ...data,
-    reg: data.registrations as unknown as { wrn: string; owner_name: string; owner_email: string },
+    reg: data.registrations as unknown as { wrn: string; status: string; owner_name: string; owner_email: string },
     claimNo: (data.claims as unknown as { claim_no: string } | null)?.claim_no ?? null,
     inspectorName: (data.staff as unknown as { full_name: string }).full_name,
   }
@@ -156,9 +156,12 @@ export async function submitInspection(id: string, raw: InspectionSubmission): P
   const res =
     insp.kind === "claim" && insp.claim_id
       ? await moveClaim(a.staff, insp.claim_id, ["inspection_scheduled", "inspection_required"], "inspection_completed", event)
-      : await moveRegistration(a.staff, insp.registration_id, ["inspector_assigned"], "inspection_completed", event, {
-          sla_due_at: await slaFromNow(settings.sla.inspection_to_certificate_hours),
-        })
+      : insp.reg.status === "inspector_assigned"
+        ? await moveRegistration(a.staff, insp.registration_id, ["inspector_assigned"], "inspection_completed", event, {
+            sla_due_at: await slaFromNow(settings.sla.inspection_to_certificate_hours),
+          })
+        : // A visit asked for outside the SylvanCare+ flow (from the e-warranty review) is only recorded.
+          (await audit({ registration_id: insp.registration_id, entity: "inspection", actor_staff: a.staff.id, actor_label: staffLabel(a.staff), ...event }), { ok: true as const })
   if (!res.ok) return res
   await notify("inspection_completed", insp.reg.owner_email, { name: insp.reg.owner_name, ref, path }, { registration_id: insp.registration_id, claim_id: insp.claim_id ?? undefined })
   return { ok: true }

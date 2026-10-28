@@ -14,7 +14,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
     db.from("registrations").select("id", head).in("status", ["received", "under_verification", "inspection_completed", "pending_approval"]),
     hasRole(staff, ["management"])
       ? db.from("e_warranties").select("id", head).eq("status", "pending_review")
-      : db.from("e_warranties").select("id", head).eq("status", "pending_review").eq("coordinator_id", staff.id),
+      : db.from("e_warranties").select("id", head).eq("status", "pending_review").or(`coordinator_id.eq.${staff.id},coordinator_id.is.null`),
     hasRole(staff, ["admin"])
       ? db.from("inspections").select("id", head).in("status", ["assigned", "scheduled", "revisit_required"])
       : db.from("inspections").select("id", head).in("status", ["assigned", "scheduled", "revisit_required"]).eq("inspector_id", staff.id),

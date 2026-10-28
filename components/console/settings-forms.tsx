@@ -3,24 +3,20 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { IconFileImport, IconKey, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react"
+import { IconKey, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react"
 
 import {
   addHoliday,
   createStaff,
-  importDealers,
   removeHoliday,
   resetStaffPassword,
-  saveDealer,
   updateGeneral,
   updateProduct,
   updateStaff,
-  type DealerInput,
   type GeneralInput,
 } from "@/app/console/(app)/settings/actions"
 import { ActionDrawer } from "@/components/console/action-drawer"
 import { FormField } from "@/components/form-field"
-import { PhoneInput } from "@/components/phone-input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -29,11 +25,9 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ROLE_LABELS, ROLES } from "@/lib/domain/constants"
 
-type Option = { value: string; label: string }
 
 function RoleChecks({ roles, setRoles }: { roles: string[]; setRoles: (r: string[]) => void }) {
   return (
@@ -190,90 +184,6 @@ export function ProductEdit({ product }: { product: { id: string; name: string; 
           Available for registration
         </FieldLabel>
       </Field>
-    </ActionDrawer>
-  )
-}
-
-export function DealerEdit({ dealer, coordinators }: { dealer?: DealerInput & { id: string }; coordinators: Option[] }) {
-  const [form, setForm] = useState<DealerInput>(dealer ?? { code: "", name: "", city: "", state: "", gstin: "", phone: "", coordinator_id: "", authorised: true, active: true })
-  return (
-    <ActionDrawer
-      trigger={dealer ? <Button variant="ghost" size="icon-sm" aria-label={`Edit ${dealer.name}`} /> : <Button />}
-      label={dealer ? <IconPencil /> : <><IconPlus data-icon="inline-start" />Add dealer</>}
-      title={dealer ? dealer.name : "Add a dealer"}
-      submitLabel="Save dealer"
-      success="Dealer saved"
-      run={() => saveDealer(form)}
-    >
-      <div className="grid grid-cols-2 gap-3">
-        <FormField label="Dealer code" htmlFor="d-code">
-          <Input id="d-code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-        </FormField>
-        <FormField label="GSTIN" htmlFor="d-gstin">
-          <Input id="d-gstin" className="font-mono uppercase" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase().slice(0, 15) })} />
-        </FormField>
-      </div>
-      <FormField label="Name" htmlFor="d-name" required>
-        <Input id="d-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </FormField>
-      <div className="grid grid-cols-2 gap-3">
-        <FormField label="City" htmlFor="d-city">
-          <Input id="d-city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-        </FormField>
-        <FormField label="State" htmlFor="d-state">
-          <Input id="d-state" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
-        </FormField>
-      </div>
-      <FormField label="Phone" htmlFor="d-phone">
-        <PhoneInput id="d-phone" value={form.phone} onValueChange={(v) => setForm({ ...form, phone: v })} />
-      </FormField>
-      <FormField label="Sales coordinator" htmlFor="d-coord" description="Reviews and issues this dealer's e-warranties">
-        <Select value={form.coordinator_id || null} onValueChange={(v) => setForm({ ...form, coordinator_id: (v as string) ?? "" })} items={coordinators}>
-          <SelectTrigger id="d-coord" className="w-full">
-            <SelectValue placeholder="Unassigned" />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {coordinators.map((c) => (
-              <SelectItem key={c.value} value={c.value}>
-                {c.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FormField>
-      <Field orientation="horizontal">
-        <Switch id="d-auth" checked={form.authorised} onCheckedChange={(v) => setForm({ ...form, authorised: v })} />
-        <FieldLabel htmlFor="d-auth" className="font-normal">
-          Authorised dealer
-        </FieldLabel>
-      </Field>
-      <Field orientation="horizontal">
-        <Switch id="d-active" checked={form.active} onCheckedChange={(v) => setForm({ ...form, active: v })} />
-        <FieldLabel htmlFor="d-active" className="font-normal">
-          Show in the registration form
-        </FieldLabel>
-      </Field>
-    </ActionDrawer>
-  )
-}
-
-export function DealerImport() {
-  const [text, setText] = useState("")
-  return (
-    <ActionDrawer
-      trigger={<Button variant="outline" />}
-      label={<><IconFileImport data-icon="inline-start" />Import list</>}
-      title="Import dealers"
-      description="Paste rows from Excel as CSV: code, name, city, state, GSTIN, phone, coordinator email. Existing codes are updated."
-      submitLabel="Import"
-      success="Import finished"
-      run={async () => {
-        const res = await importDealers(text)
-        if (res.ok && res.summary) toast.info(res.summary)
-        return res
-      }}
-    >
-      <Textarea rows={10} className="font-mono text-xs" placeholder={"code,name,city,state,gstin,phone,coordinator_email\nDLR-001,Shree Plywood,Kolkata,West Bengal,19ABCDE1234F1Z5,9830000000,coordinator@example.com"} value={text} onChange={(e) => setText(e.target.value)} />
     </ActionDrawer>
   )
 }

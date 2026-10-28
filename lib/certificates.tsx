@@ -39,6 +39,8 @@ const s = StyleSheet.create({
   small: { fontSize: 7.5, color: MUTED },
   qr: { width: 64, height: 64 },
   termsText: { fontSize: 8, lineHeight: 1.4, marginBottom: 3 },
+  watermark: { position: "absolute", top: 330, left: 60, fontSize: 96, fontFamily: "Helvetica-Bold", color: RED, opacity: 0.08, transform: "rotate(-30deg)" },
+  previewBar: { backgroundColor: "#fef3c7", color: "#92400e", fontSize: 8.5, paddingVertical: 5, paddingHorizontal: 36, textAlign: "center" },
 })
 
 const SITE = () => process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
@@ -75,6 +77,21 @@ function Footer({ qr, verifyUrl, note }: { qr: string; verifyUrl: string; note: 
   )
 }
 
+/** Staff see a certificate before it is issued; the preview is clearly marked so it can't pass as the real one. */
+function PreviewMarks({ preview }: { preview?: boolean }) {
+  if (!preview) return null
+  return (
+    <>
+      <Text style={s.watermark} fixed>
+        PREVIEW
+      </Text>
+      <Text style={s.previewBar} fixed>
+        Preview for Sylvan staff — not valid until it is issued. The number and dates are filled in on issue.
+      </Text>
+    </>
+  )
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <View style={s.cell}>
@@ -106,6 +123,7 @@ export type CarePlusData = {
   activated_at: string | null
   invoices: { invoice_number: string; invoice_date: string; dealer_name: string }[]
   items: { product_name: string; category: string; qty_used: number; care_start: string | null; care_expiry: string | null; years: number | null }[]
+  preview?: boolean
 }
 
 export async function renderCarePlusCertificate(d: CarePlusData) {
@@ -114,6 +132,7 @@ export async function renderCarePlusCertificate(d: CarePlusData) {
   return renderToBuffer(
     <Document title={`SylvanCare+ Warranty Certificate ${d.wrn}`} author="Sylvan Plyboard (India) Limited">
       <Page size="A4" style={s.page}>
+        <PreviewMarks preview={d.preview} />
         <Band logo={logo} title="SylvanCare+ Warranty Certificate" sub="Total cover warranty on premium Sylvan plywood" />
         <View style={s.body}>
           <View style={s.numberRow}>
@@ -184,10 +203,12 @@ export async function renderCarePlusCertificate(d: CarePlusData) {
 
 // ---------------------------------------------------------------------------
 
+type Program = "LIFETIME" | "STD_710" | "WPC"
+
 export type EWarrantyData = {
   number: string
-  program: "LIFETIME" | "STD_710" | "WPC"
-  title: string
+  /** Certificate types of the products on it, each with its own terms. */
+  programs: { code: Program; title: string }[]
   issued_at: string
   customer_name: string
   customer_address: string
@@ -196,65 +217,77 @@ export type EWarrantyData = {
   invoice_date: string
   issued_by: string | null
   items: { product_name: string; category: string; qty: number; warranty_period: string; invoice_number: string }[]
+  preview?: boolean
 }
 
 export async function renderEWarrantyCertificate(d: EWarrantyData) {
   const { logo, verifyUrl, qr } = await assets(d.number)
-  const terms = STANDARD_TERMS[d.program]
   const widths = ["34%", "18%", "12%", "16%", "20%"]
+  const codes = d.programs.map((p) => p.code)
+  const single = d.programs.length === 1 ? d.programs[0] : null
+  const lifetime = codes.includes("LIFETIME")
   return renderToBuffer(
     <Document title={`Sylvan e-Warranty ${d.number}`} author="Sylvan Plyboard (India) Limited">
       <Page size="A4" style={s.page}>
-        <Band logo={logo} title="E-Warranty Certificate" sub={d.title.replace(/^E-Warranty Certificate — /, "")} />
+        <PreviewMarks preview={d.preview} />
+        <Band logo={logo} title="E-Warranty Certificate" sub={single ? single.title.replace(/^E-Warranty Certificate — /, "") : "Standard warranty on Sylvan products"} />
         <View style={s.body}>
-          <Text style={[s.termsText, { fontSize: 9 }]}>{terms.intro}</Text>
-          {terms.coveredProducts && (
-            <Text style={[s.small, { marginBottom: 8 }]}>This warranty applies to: {terms.coveredProducts.join(", ")}.</Text>
-          )}
+          {d.programs.map((p) => (
+            <Text key={p.code} style={[s.termsText, { fontSize: 9 }]}>
+              {STANDARD_TERMS[p.code].intro}
+            </Text>
+          ))}
           <Text style={s.h2}>Warranty details</Text>
           <View style={s.grid}>
             <Field label="Name" value={d.customer_name} />
             <Field label="Dealer / sub-dealer / OEM" value={d.dealer_name} />
             <Field label="Warranty no." value={d.number} />
             <Field label="Warranty issue date" value={formatDate(d.issued_at)} />
-            {d.program === "WPC" && <Field label="Invoice no. / date" value={`${d.invoice_number} · ${formatDate(d.invoice_date)}`} />}
+            {codes.includes("WPC") && <Field label="Invoice no. / date" value={`${d.invoice_number} · ${formatDate(d.invoice_date)}`} />}
             <View style={[s.cell, { width: "100%" }]}>
               <Text style={s.label}>Address</Text>
               <Text style={s.value}>{d.customer_address}</Text>
             </View>
           </View>
           <View style={s.table}>
-            <Cols header widths={widths} cells={["Product", "Category", "Qty", d.program === "LIFETIME" ? "Warranty*" : "Warranty", "Invoice no."]} />
+            <Cols header widths={widths} cells={["Product", "Category", "Qty", lifetime ? "Warranty*" : "Warranty", "Invoice no."]} />
             {d.items.map((i, idx) => (
               <Cols key={idx} widths={widths} cells={[i.product_name, categoryLabel(i.category), String(i.qty), i.warranty_period, i.invoice_number]} />
             ))}
           </View>
-          {d.program === "LIFETIME" && <Text style={[s.small, { marginTop: 3 }]}>*Limited to the manufacturing defects as mentioned in the terms below.</Text>}
+          {lifetime && <Text style={[s.small, { marginTop: 3 }]}>*Limited to the manufacturing defects as mentioned in the terms below.</Text>}
           {d.issued_by && <Text style={[s.small, { marginTop: 6 }]}>Warranty issued by: {d.issued_by}</Text>}
         </View>
         <Footer qr={qr} verifyUrl={verifyUrl} note="Present this certificate with the original invoice to your authorised Sylvan dealer / sub-dealer for any warranty assistance." />
       </Page>
-      <Page size="A4" style={[s.page, { paddingTop: 30 }]}>
-        <View style={s.body}>
-          <Text style={s.h2}>Terms and conditions</Text>
-          {terms.terms.map((t, i) => (
-            <Text key={i} style={s.termsText}>
-              {i + 1}. {t}
-            </Text>
-          ))}
-          {terms.exclusions && (
-            <>
-              <Text style={s.h2}>This warranty does not cover damages or defects caused by</Text>
-              {terms.exclusions.map((t, i) => (
+      {d.programs.map((p) => {
+        const terms = STANDARD_TERMS[p.code]
+        return (
+          <Page key={p.code} size="A4" style={[s.page, { paddingTop: 30 }]}>
+            <PreviewMarks preview={d.preview} />
+            <View style={s.body}>
+              <Text style={s.h2}>{single ? "Terms and conditions" : `Terms and conditions — ${p.title.replace(/^E-Warranty Certificate — /, "")}`}</Text>
+              {terms.coveredProducts && <Text style={[s.small, { marginBottom: 6 }]}>Applies to: {terms.coveredProducts.join(", ")}.</Text>}
+              {terms.terms.map((t, i) => (
                 <Text key={i} style={s.termsText}>
-                  {String.fromCharCode(97 + i)}. {t}
+                  {i + 1}. {t}
                 </Text>
               ))}
-            </>
-          )}
-        </View>
-        <Footer qr={qr} verifyUrl={verifyUrl} note={`${d.title} · ${d.number}`} />
-      </Page>
+              {terms.exclusions && (
+                <>
+                  <Text style={s.h2}>This warranty does not cover damages or defects caused by</Text>
+                  {terms.exclusions.map((t, i) => (
+                    <Text key={i} style={s.termsText}>
+                      {String.fromCharCode(97 + i)}. {t}
+                    </Text>
+                  ))}
+                </>
+              )}
+            </View>
+            <Footer qr={qr} verifyUrl={verifyUrl} note={`${p.title} · ${d.number}`} />
+          </Page>
+        )
+      })}
     </Document>
   )
 }

@@ -25,7 +25,7 @@ export default async function ComplaintPage({ params }: { params: Promise<{ ref:
 
   const today = todayIST()
   const items = reg.items
-    .filter((i) => i.care_plus && (!i.care_expiry || i.care_expiry >= today))
+    .filter((i) => i.care_plus && i.review_status !== "rejected" && (!i.care_expiry || i.care_expiry >= today))
     .map((i) => ({ id: i.id, product_name: i.product_name, covered: i.qty_used - i.utilised_qty, care_start: i.care_start }))
   if (!items.length) redirect(`/my/registrations/${ref}`)
 

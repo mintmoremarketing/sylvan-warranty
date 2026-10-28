@@ -34,9 +34,13 @@ export function ActionDrawer({
   run,
   children,
   success,
+  wide,
+  open: controlledOpen,
+  onOpenChange,
 }: {
-  trigger: React.ReactElement
-  label: React.ReactNode
+  /** Omit trigger and label to open the drawer from code with `open` / `onOpenChange`. */
+  trigger?: React.ReactElement
+  label?: React.ReactNode
   title: string
   description?: string
   submitLabel: string
@@ -44,17 +48,26 @@ export function ActionDrawer({
   run: () => Promise<Result>
   children?: React.ReactNode
   success?: string
+  /** Room for a certificate preview. */
+  wide?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlledOpen ?? ownOpen
+  const setOpen = (o: boolean) => {
+    setOwnOpen(o)
+    onOpenChange?.(o)
+  }
   const [error, setError] = useState("")
   const [pending, start] = useTransition()
 
   return (
     <Drawer open={open} onOpenChange={(o) => { setOpen(o); if (!o) setError("") }}>
-      <DrawerTrigger render={trigger}>{label}</DrawerTrigger>
+      {trigger && <DrawerTrigger render={trigger}>{label}</DrawerTrigger>}
       <DrawerContent>
-        <div className="mx-auto flex max-h-[85svh] w-full max-w-lg flex-col overflow-y-auto">
+        <div className={`mx-auto flex max-h-[90svh] w-full flex-col overflow-y-auto ${wide ? "max-w-3xl" : "max-w-lg"}`}>
           <DrawerHeader>
             <DrawerTitle>{title}</DrawerTitle>
             {description && <DrawerDescription>{description}</DrawerDescription>}

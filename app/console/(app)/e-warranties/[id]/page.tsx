@@ -5,6 +5,7 @@ import { IconDownload } from "@tabler/icons-react"
 
 import { EWarrantyEditor } from "@/components/console/e-warranty-editor"
 import { CONSOLE_CARD, PageBody, PageHeader } from "@/components/console/page-header"
+import { ProductReview } from "@/components/console/product-review"
 import { DocumentList } from "@/components/document-list"
 import { EWarrantyBadge, Timeline } from "@/components/status"
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,7 @@ import { formatDate, formatDateTime } from "@/lib/domain/dates"
 import { formatMobile } from "@/lib/domain/format"
 import { toSlug } from "@/lib/domain/numbers"
 import { loadRegistration } from "@/lib/queries"
+import { reviewGroups } from "@/lib/review-groups"
 import { getAllProducts } from "@/lib/settings"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 
@@ -25,30 +27,38 @@ export default async function EWarrantyPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const staff = await requireStaff(["sales_coordinator", "management"], `/console/e-warranties/${id}`)
   const db = supabaseAdmin()
-  const { data: row } = await db.from("e_warranties").select("registration_id, coordinator_id, issued_by, registrations(wrn), warranty_programs(name, certificate_title)").eq("id", id).maybeSingle()
+  const { data: row } = await db.from("e_warranties").select("registration_id, coordinator_id, issued_by, registrations(wrn)").eq("id", id).maybeSingle()
   if (!row) notFound()
-  if (row.coordinator_id !== staff.id && !hasRole(staff, ["management"])) notFound()
+  // Coordinators see e-warranties assigned to them and unassigned ones (there is no dealer list to route by).
+  if (row.coordinator_id && row.coordinator_id !== staff.id && !hasRole(staff, ["management"])) notFound()
 
   const reg = (await loadRegistration((row.registrations as unknown as { wrn: string }).wrn))!
   const ew = reg.eWarranties.find((e) => e.id === id)!
-  const program = row.warranty_programs as unknown as { name: string; certificate_title: string }
-  const [products, { data: coordinators }, { data: events }, { data: issuer }] = await Promise.all([
+  const [products, { data: coordinators }, { data: events }, { data: issuer }, { data: inspectors }, { data: staffNames }] = await Promise.all([
     getAllProducts(),
     db.from("staff").select("id, full_name").contains("roles", ["sales_coordinator"]).eq("active", true),
     db.from("audit_events").select("*").eq("e_warranty_id", id).order("created_at", { ascending: false }),
     row.issued_by ? db.from("staff").select("full_name").eq("id", row.issued_by).single() : Promise.resolve({ data: null }),
+    db.from("staff").select("id, full_name, regions").contains("roles", ["inspector"]).eq("active", true).order("full_name"),
+    db.from("staff").select("id, full_name"),
   ])
-  const editable = ew.status === "pending_review" && (row.coordinator_id === staff.id || hasRole(staff, ["admin"]))
+  const editable = ew.status === "pending_review" && (!row.coordinator_id || row.coordinator_id === staff.id || hasRole(staff, ["admin"])) && hasRole(staff, ["sales_coordinator"])
+  const groups = reviewGroups(reg, staff, new Map((staffNames ?? []).map((s) => [s.id, s.full_name])), "standard")
+  const inspectorOptions = (inspectors ?? []).map((i) => ({
+    value: i.id,
+    label: `${i.full_name}${(i.regions as string[]).length ? ` (${(i.regions as string[]).join(", ")})` : ""}${(i.regions as string[]).includes(reg.state) ? " · same state" : ""}`,
+  }))
+  const openVisit = reg.inspections.findLast((i) => i.kind === "registration" && ["assigned", "scheduled", "revisit_required"].includes(i.status))
 
   return (
     <>
       <PageHeader
         back={{ href: "/console/e-warranties", label: "E-warranties" }}
-        title={ew.number ?? program.name}
+        title={ew.number ?? "Standard e-warranty"}
         description={
           <span className="flex flex-wrap items-center gap-2">
             <EWarrantyBadge status={ew.status} audience="staff" />
-            <span>{program.certificate_title}</span>
+            <span>{reg.wrn}</span>
           </span>
         }
         actions={
@@ -83,6 +93,32 @@ export default async function EWarrantyPage({ params }: { params: Promise<{ id: 
           </CardContent>
         </Card>
 
+        {groups.length > 0 && (
+          <Card className={CONSOLE_CARD}>
+            <CardHeader>
+              <CardTitle>Product checks</CardTitle>
+              <CardDescription>Approve or reject each product. Only approved products are printed on the e-warranty.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProductReview groups={groups} />
+            </CardContent>
+          </Card>
+        )}
+
+        {openVisit && (
+          <Card className={CONSOLE_CARD}>
+            <CardHeader>
+              <CardTitle>Site inspection</CardTitle>
+              <CardDescription>
+                <Link href={`/console/inspections/${openVisit.id}`} className="underline underline-offset-4">
+                  {openVisit.staff?.full_name}
+                </Link>
+                {openVisit.scheduled_at ? ` · visit ${formatDateTime(openVisit.scheduled_at)}` : " · visit not scheduled yet"}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
+
         {editable ? (
           <EWarrantyEditor
             id={id}
@@ -95,11 +131,15 @@ export default async function EWarrantyPage({ params }: { params: Promise<{ id: 
               invoice_date: ew.invoice_date,
               coordinator_id: ew.coordinator_id ?? "",
             }}
-            items={ew.e_warranty_items.map((i) => ({ id: i.id, product_id: i.product_id, qty: i.qty, category: i.category, invoice_number: i.invoice_number }))}
-            products={products.filter((p) => p.standard_program === ew.program).map((p) => ({ id: p.id, name: p.name, category: p.category }))}
+            items={ew.e_warranty_items
+              .filter((i) => reg.items.find((x) => x.id === i.item_id)?.review_status !== "rejected")
+              .map((i) => ({ id: i.id, product_id: i.product_id, qty: i.qty, category: i.category, invoice_number: i.invoice_number }))}
+            products={products.filter((p) => p.standard_program).map((p) => ({ id: p.id, name: p.name, category: p.category }))}
             coordinators={(coordinators ?? []).map((c) => ({ value: c.id, label: c.full_name }))}
-            isWpc={ew.program === "WPC"}
+            isWpc={ew.e_warranty_items.some((i) => (i.program ?? ew.program) === "WPC")}
             canAssign={hasRole(staff, ["admin"])}
+            inspectors={inspectorOptions}
+            previewUrl={`/api/certificates/e-warranty/${id}?preview=1`}
           />
         ) : (
           <Card className={CONSOLE_CARD}>

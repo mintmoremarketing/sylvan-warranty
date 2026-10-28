@@ -51,3 +51,6 @@ skills-lock.json
 # supabase cli
 /supabase/.temp/
 /supabase/.branches/
+
+.vercel
+.env*

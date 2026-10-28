@@ -7,7 +7,6 @@ import { daysBetween, shiftDate } from "@/lib/domain/dates"
 export const MOBILE_RE = /^[6-9]\d{9}$/
 export const PHONE_RE = /^\d{10,11}$/
 export const PINCODE_RE = /^[1-9]\d{5}$/
-export const GSTIN_RE = /^[0-9]{2}[A-Z0-9]{10}[0-9A-Z]{3}$/
 export const NAME_RE = /^[\p{L}][\p{L} .'-]{1,79}$/u
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const INVOICE_NO_RE = /^[A-Za-z0-9][A-Za-z0-9/_.\- ]{0,39}$/
@@ -97,11 +96,14 @@ export function lineEligibility(
     carePlusNote = "SylvanCare+ covers purchases from 1 Oct 2026"
   const carePlus = isCarePlusProduct && carePlusNote === null
 
+  // Each line goes on one certificate: a SylvanCare+ product on the SylvanCare+ certificate, falling back
+  // to the standard e-warranty only when it doesn't qualify for SylvanCare+.
   let standardNote: string | null = null
-  if (!product.standard_program) standardNote = "No standard e-warranty for this product"
+  if (carePlus) standardNote = "Covered by SylvanCare+"
+  else if (!product.standard_program) standardNote = "No standard e-warranty for this product"
   else if (age > s.standard.windowDays)
     standardNote = `Standard e-warranty window (${s.standard.windowDays} days) has passed`
-  const standard = !!product.standard_program && standardNote === null
+  const standard = !carePlus && !!product.standard_program && standardNote === null
 
   return { carePlus, standard, carePlusNote, standardNote }
 }
@@ -124,10 +126,8 @@ export type InvoiceInput = {
   files: FileRef[]
   invoice_number: string
   invoice_date: string
-  dealer_id: string
   dealer_name: string
   dealer_phone: string
-  dealer_gstin: string
   batch_code: string
   items: ItemInput[]
 }
@@ -238,11 +238,9 @@ export function validateRegistration(p: RegistrationInput, ctx: ValidationContex
     else if (inv.invoice_date < oldest)
       e[k("invoice_date")] = `Only invoices from the last ${settings.carePlus.windowDays} days can be registered`
 
-    if (req(k("dealer_name"), inv.dealer_name, "Dealer") && !inv.dealer_id) {
-      if (req(k("dealer_phone"), inv.dealer_phone, "Dealer phone") && !PHONE_RE.test(inv.dealer_phone))
-        e[k("dealer_phone")] = "Enter a valid phone number"
-    }
-    if (inv.dealer_gstin && !GSTIN_RE.test(inv.dealer_gstin)) e[k("dealer_gstin")] = "Enter a valid 15-character GSTIN"
+    req(k("dealer_name"), inv.dealer_name, "Dealer name")
+    if (req(k("dealer_phone"), inv.dealer_phone, "Dealer phone") && !PHONE_RE.test(inv.dealer_phone))
+      e[k("dealer_phone")] = "Enter a valid phone number"
 
     const invoiceLines: (LineEligibility | null)[] = []
     if (inv.items.length === 0) e[k("items")] = "Add at least one product"
