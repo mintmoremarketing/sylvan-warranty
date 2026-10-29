@@ -75,7 +75,7 @@ export default async function ReportsPage() {
           {kpis.map((k) => (
             <Card key={k.label} size="sm">
               <CardHeader>
-                <CardDescription>{k.label}</CardDescription>
+                <CardDescription className="line-clamp-2 min-h-10">{k.label}</CardDescription>
                 <CardTitle className="text-xl tabular-nums">{k.value}</CardTitle>
               </CardHeader>
             </Card>
