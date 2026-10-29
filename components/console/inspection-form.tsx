@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { IconCurrentLocation, IconMapPin } from "@tabler/icons-react"
 
 import { submitInspection } from "@/app/console/(app)/inspections/actions"
 import { CONSOLE_CARD } from "@/components/console/page-header"
@@ -23,7 +22,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { validateInspection, type FieldDef, type FormDef } from "@/lib/domain/inspection-forms"
 
-type Geo = { lat: number; lng: number; accuracy: number }
 
 const noopSubscribe = () => () => {}
 function readDraft(key: string) {
@@ -46,9 +44,6 @@ export function InspectionForm({ id, form }: { id: string; form: FormDef }) {
   const [values, setValues] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [media, setMedia] = useState<Record<string, UploadItem[]>>({})
-  const [geo, setGeo] = useState<Geo | null>(null)
-  const [geoNote, setGeoNote] = useState("")
-  const [locating, setLocating] = useState(false)
   const [ackName, setAckName] = useState("")
   const [ackConfirmed, setAckConfirmed] = useState(false)
   const [declared, setDeclared] = useState(false)
@@ -87,11 +82,10 @@ export function InspectionForm({ id, form }: { id: string; form: FormDef }) {
     if (!showErrors) return {}
     const e: Record<string, string> = outcome === "completed" ? validateInspection(form, { values, notes }, counts) : {}
     if (outcome === "revisit_required" && !(values.remarks ?? "").trim()) e.remarks = "Explain why a revisit is needed"
-    if (!geo && !geoNote.trim()) e.geo = "Capture the location, or explain why it isn't available"
     if (!declared) e.declared = "Confirm the inspector declaration"
     if (outcome === "completed" && (!ackConfirmed || !ackName.trim())) e.ack = "Record the customer / site owner acknowledgement"
     return e
-  }, [showErrors, outcome, form, values, notes, counts, geo, geoNote, declared, ackConfirmed, ackName])
+  }, [showErrors, outcome, form, values, notes, counts, declared, ackConfirmed, ackName])
   const errors = { ...clientErrors, ...serverErrors }
 
   const setValue = (key: string, v: string) => {
@@ -99,22 +93,6 @@ export function InspectionForm({ id, form }: { id: string; form: FormDef }) {
     setServerErrors({})
   }
   const mediaSetter = (key: string) => (fn: (prev: UploadItem[]) => UploadItem[]) => setMedia((m) => ({ ...m, [key]: fn(m[key] ?? []) }))
-
-  function locate() {
-    if (!navigator.geolocation) return toast.error("Location isn't available on this device.")
-    setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setGeo({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy) })
-        setLocating(false)
-      },
-      (err) => {
-        setLocating(false)
-        toast.error(err.code === 1 ? "Location permission was denied." : "Couldn't get your location. Try again outside or near a window.")
-      },
-      { enableHighAccuracy: true, timeout: 20000 }
-    )
-  }
 
   function renderField(f: FieldDef) {
     const err = errors[f.key]
@@ -223,8 +201,6 @@ export function InspectionForm({ id, form }: { id: string; form: FormDef }) {
           const res = await submitInspection(id, {
             answers: { values, notes },
             media: Object.fromEntries(Object.entries(media).map(([k, v]) => [k, doneFiles(v)])),
-            geo,
-            geoNote,
             ackName,
             ackConfirmed,
             declared,
@@ -255,37 +231,6 @@ export function InspectionForm({ id, form }: { id: string; form: FormDef }) {
           </AlertDescription>
         </Alert>
       )}
-      <Card className={CONSOLE_CARD}>
-        <CardHeader>
-          <CardTitle>Location</CardTitle>
-          <CardDescription>Capture GPS at the site to confirm the visit location.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Field data-invalid={!!errors.geo}>
-            {geo ? (
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <IconMapPin className="size-4 text-primary" />
-                <span className="font-mono">
-                  {geo.lat.toFixed(5)}, {geo.lng.toFixed(5)}
-                </span>
-                <span className="text-muted-foreground">±{geo.accuracy} m</span>
-                <Button variant="link" className="h-auto p-0" render={<a href={`https://www.google.com/maps?q=${geo.lat},${geo.lng}`} target="_blank" rel="noreferrer" />} nativeButton={false}>
-                  View on map
-                </Button>
-              </div>
-            ) : null}
-            <Button type="button" variant={geo ? "outline" : "default"} className="h-11 w-full sm:w-fit" onClick={locate} disabled={locating}>
-              {locating ? <Spinner data-icon="inline-start" /> : <IconCurrentLocation data-icon="inline-start" />}
-              {geo ? "Recapture location" : "Capture location"}
-            </Button>
-            {!geo && (
-              <Input placeholder="Or explain why location isn't available" value={geoNote} onChange={(e) => setGeoNote(e.target.value)} aria-invalid={!!errors.geo} />
-            )}
-            <FieldError>{errors.geo}</FieldError>
-          </Field>
-        </CardContent>
-      </Card>
-
       <Card className={CONSOLE_CARD}>
         <CardHeader>
           <CardTitle>Outcome of the visit</CardTitle>

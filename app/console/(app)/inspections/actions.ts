@@ -67,8 +67,6 @@ export async function scheduleInspection(id: string, when: string): Promise<Acti
 export type InspectionSubmission = {
   answers: InspectionAnswers
   media: Record<string, unknown>
-  geo: { lat: number; lng: number; accuracy: number } | null
-  geoNote: string
   ackName: string
   ackConfirmed: boolean
   declared: boolean
@@ -93,7 +91,6 @@ export async function submitInspection(id: string, raw: InspectionSubmission): P
   const errors: Record<string, string> = {}
   if (raw.outcome === "completed") Object.assign(errors, validateInspection(form, { values, notes }, counts))
   else if (!(values.remarks ?? "").trim()) errors.remarks = "Explain why a revisit is needed"
-  if (!raw.geo && !(raw.geoNote ?? "").trim()) errors.geo = "Capture the location, or explain why it isn't available"
   if (!raw.declared) errors.declared = "Confirm the inspector declaration"
   if (raw.outcome === "completed" && (!raw.ackConfirmed || !(raw.ackName ?? "").trim())) errors.ack = "Record the customer / site owner acknowledgement"
   if (!(await verifyUploads(user!.id, allFiles))) errors.form = "Some photos didn't upload. Please re-add them."
@@ -120,10 +117,7 @@ export async function submitInspection(id: string, raw: InspectionSubmission): P
     .update({
       status: raw.outcome,
       form_version: form.version,
-      answers: { values, notes, geo_note: raw.geo ? null : raw.geoNote },
-      geo_lat: raw.geo?.lat ?? null,
-      geo_lng: raw.geo?.lng ?? null,
-      geo_accuracy_m: raw.geo?.accuracy ?? null,
+      answers: { values, notes },
       customer_ack_name: raw.ackConfirmed ? raw.ackName.trim().slice(0, 80) : null,
       customer_ack_at: raw.ackConfirmed ? now : null,
       inspector_declared_at: now,

@@ -25,6 +25,25 @@ export const ROLE_LABELS: Record<Role, string> = {
   management: "Management",
 }
 
+/** What each role sees in the console and what it can do, shown when assigning roles. Keep in step with the sidebar and the actions. */
+export const ROLE_ACCESS: Record<Role, { tabs: string; can: string }> = {
+  admin: { tabs: "Every tab", can: "Everything, plus staff & roles, products and SLA & rules" },
+  customer_care: {
+    tabs: "Registrations, Claims, Assisted registration, Call-back requests, Messages sent",
+    can: "Register and raise complaints for customers, handle call-backs",
+  },
+  verifier: {
+    tabs: "Registrations, Inspections, Claims",
+    can: "Check each product, request info, decide on and assign inspections, pre-screen claims",
+  },
+  approver: { tabs: "Registrations, Claims, Reports", can: "Approve or reject SylvanCare+ warranties and claim compensation" },
+  inspector: { tabs: "Inspections", can: "Fill in the site inspection form for visits assigned to them" },
+  sales_coordinator: { tabs: "E-warranties", can: "Check standard products, correct, issue or decline e-warranties, assign inspectors" },
+  technical: { tabs: "Inspections, Claims", can: "Claim inspections, samples, lab reports and the technical decision" },
+  finance: { tabs: "Claims, Reports", can: "Finance approval and settlement of claims" },
+  management: { tabs: "Registrations, E-warranties, Claims, Reports", can: "View everything; no workflow actions" },
+}
+
 export const CATEGORIES = [
   { value: "plywood", label: "Plywood" },
   { value: "blockboard", label: "Blockboard" },

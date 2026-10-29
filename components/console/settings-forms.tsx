@@ -20,26 +20,29 @@ import { FormField } from "@/components/form-field"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { ROLE_LABELS, ROLES } from "@/lib/domain/constants"
+import { ROLE_ACCESS, ROLE_LABELS, ROLES } from "@/lib/domain/constants"
 
 
 function RoleChecks({ roles, setRoles }: { roles: string[]; setRoles: (r: string[]) => void }) {
   return (
     <Field>
       <FieldLabel>Roles</FieldLabel>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         {ROLES.map((r) => (
           <Field key={r} orientation="horizontal">
             <Checkbox id={`role-${r}`} checked={roles.includes(r)} onCheckedChange={(c) => setRoles(c ? [...roles, r] : roles.filter((x) => x !== r))} />
-            <FieldLabel htmlFor={`role-${r}`} className="font-normal">
-              {ROLE_LABELS[r]}
-            </FieldLabel>
+            <FieldContent>
+              <FieldLabel htmlFor={`role-${r}`}>{ROLE_LABELS[r]}</FieldLabel>
+              <FieldDescription>
+                Sees: {ROLE_ACCESS[r].tabs}. Can: {ROLE_ACCESS[r].can}.
+              </FieldDescription>
+            </FieldContent>
           </Field>
         ))}
       </div>
